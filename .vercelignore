@@ -1,0 +1,5 @@
+backend/
+requirements.txt
+security_audit.log
+.python-version
+render.yaml

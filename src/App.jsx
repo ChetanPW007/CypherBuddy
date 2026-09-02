@@ -14,6 +14,10 @@ import ReportsScreen from './pages/ReportsScreen';
 import FamilyScreen from './pages/FamilyScreen';
 import PermissionsScreen from './pages/PermissionsScreen';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminAuthScreen from './pages/AdminAuthScreen';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
 
 import './styles/glassmorphism.css';
 
@@ -262,12 +266,23 @@ export default function App() {
             />
           )}
 
-          {/* VIEW: ADMIN DASHBOARD */}
+          {/* VIEW: ADMIN DASHBOARD (2-STEP OTP PROTECTED) */}
           {activeTab === 'admin' && (
-            <AdminDashboard
-              history={history}
-            />
+            user?.role === 'ADMIN' ? (
+              <AdminDashboard
+                history={history}
+                apiBaseUrl={API_BASE_URL}
+              />
+            ) : (
+              <AdminAuthScreen
+                apiBaseUrl={API_BASE_URL}
+                onAdminAuthSuccess={(authData) => {
+                  setUser(authData.user);
+                }}
+              />
+            )
           )}
+
 
         </main>
 

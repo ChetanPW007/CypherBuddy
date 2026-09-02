@@ -10,8 +10,13 @@ pydantic[email]==2.11.5
 bcrypt==5.0.0
 PyJWT==2.12.1
 
+# Database (MongoDB Async Driver)
+motor==3.7.0
+pymongo==4.11.2
+
 # File Upload & Multipart Support
 python-multipart==0.0.21
+
 
 # Optional: VirusTotal Integration
 # vt-py==0.18.0

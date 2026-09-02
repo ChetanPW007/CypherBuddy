@@ -1,0 +1,29 @@
+# CypherBuddy .gitignore
+# Security Rule: Never commit secrets, credentials, or quarantined files.
+
+# Environment variables & secrets
+.env
+.env.local
+.env.production
+
+# Node dependencies
+node_modules/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Quarantined malware upload storage
+backend/uploads_quarantine/
+
+# Security audit logs (may contain IP addresses)
+backend/security_audit.log
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store

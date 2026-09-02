@@ -1,0 +1,27 @@
+# CypherBuddy Python Backend Dependencies
+# Install via: pip install -r requirements.txt
+
+# Core Web Framework & Server
+fastapi==0.115.12
+uvicorn==0.34.3
+pydantic[email]==2.11.5
+
+# Authentication & Security
+bcrypt==5.0.0
+PyJWT==2.12.1
+
+# File Upload & Multipart Support
+python-multipart==0.0.21
+
+# Optional: VirusTotal Integration
+# vt-py==0.18.0
+
+# Optional: OCR / Computer Vision
+# pytesseract==0.3.10
+# opencv-python==4.10.0.84
+
+# Optional: YARA Rules Engine
+# yara-python==4.5.0
+
+# Optional: ClamAV Integration
+# clamd==1.0.2

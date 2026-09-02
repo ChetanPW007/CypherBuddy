@@ -1,0 +1,8 @@
+@import './styles/glassmorphism.css';
+
+#root {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}

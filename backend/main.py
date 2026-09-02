@@ -15,7 +15,11 @@ from pydantic import BaseModel, EmailStr, Field
 import bcrypt
 import jwt
 
-from security_engine import analyze_url_hardened, analyze_message_hardened, validate_file_magic_bytes, is_ssrf_safe_url
+try:
+    from backend.security_engine import analyze_url_hardened, analyze_message_hardened, validate_file_magic_bytes, is_ssrf_safe_url
+except ImportError:
+    from security_engine import analyze_url_hardened, analyze_message_hardened, validate_file_magic_bytes, is_ssrf_safe_url
+
 
 # Configure Security Audit Logger
 logging.basicConfig(

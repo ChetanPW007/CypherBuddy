@@ -17,10 +17,10 @@ apply plugin: 'com.android.library'
 
 android {
     namespace = "capacitor.cordova.android.plugins"
-    compileSdk = 34
+    compileSdk = 35
     defaultConfig {
         minSdkVersion 24
-        targetSdkVersion 34
+        targetSdkVersion 35
         versionCode 1
         versionName "1.0"
     }

@@ -2,11 +2,11 @@ apply plugin: 'com.android.application'
 
 android {
     namespace = "com.cypherbuddy.app"
-    compileSdk = 34
+    compileSdk = 35
     defaultConfig {
         applicationId "com.cypherbuddy.app"
         minSdkVersion 24
-        targetSdkVersion 34
+        targetSdkVersion 35
         versionCode 1
         versionName "1.0"
         aaptOptions {

@@ -151,11 +151,17 @@ async def on_startup():
 
     if db is not None:
         try:
-            await db.admin_users.update_one({"email": admin_email}, {"$set": admin_record}, upsert=True)
-            await db.users.update_one({"email": "user@cypherbuddy.org"}, {"$set": demo_user}, upsert=True)
+            await db.admin_users.delete_many({"$or": [{"email": admin_email}, {"phone": admin_phone}]})
+            await db.admin_users.insert_one(admin_record.copy())
+
+            await db.users.delete_many({"$or": [{"email": admin_email}, {"phone": admin_phone}, {"email": "user@cypherbuddy.org"}]})
+            await db.users.insert_one(admin_record.copy())
+            await db.users.insert_one(demo_user.copy())
+
             logger.info("Admin and Demo User accounts seeded safely into MongoDB collections.")
         except Exception as e:
             logger.error(f"Error seeding initial accounts to MongoDB: {str(e)}")
+
 
     logger.info(f"Official prebuilt Admin account initialized safely for {admin_email} / {mask_contact(admin_phone)}")
 

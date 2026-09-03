@@ -47,11 +47,13 @@ jobs:
         run: npx cap sync android
 
       - name: Make gradlew executable
-        run: chmod +x android/gradlew
+        run: |
+          sed -i 's/\r$//' android/gradlew
+          chmod +x android/gradlew
 
       - name: Build Android APK
         working-directory: ./android
-        run: ./gradlew app:assembleDebug -x lint -x test --no-daemon
+        run: ./gradlew assembleDebug -x lint -x test --no-daemon
 
       - name: Upload Android Debug APK
         uses: actions/upload-artifact@v4

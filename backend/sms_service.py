@@ -45,12 +45,61 @@ def mask_contact(contact: str) -> str:
             return contact[:3] + " ****** " + contact[-4:]
         return "******" + contact[-2:] if len(contact) >= 2 else "******"
 
+def send_email_otp(email_addr: str, otp: str) -> bool:
+    """Dispatches free OTP email via SMTP (e.g. Gmail SMTP)."""
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER", "").strip()
+    smtp_pass = os.getenv("SMTP_PASS", "").strip()
+
+    if not smtp_user or not smtp_pass:
+        return False
+
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"🔐 CypherBuddy Verification OTP: {otp}"
+        msg["From"] = f"CypherBuddy Security <{smtp_user}>"
+        msg["To"] = email_addr
+
+        html_content = f"""
+        <div style="font-family: Arial, sans-serif; background-color: #0f172a; color: #ffffff; padding: 30px; border-radius: 12px; max-width: 500px; margin: 0 auto;">
+          <h2 style="color: #38bdf8; text-align: center;">CypherBuddy Security Gateway</h2>
+          <p style="font-size: 16px;">Hello Admin,</p>
+          <p style="font-size: 14px; color: #94a3b8;">Your 6-digit 2-step authentication OTP code is:</p>
+          <div style="background-color: #1e293b; padding: 20px; text-align: center; border-radius: 8px; font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #4ade80;">
+            {otp}
+          </div>
+          <p style="font-size: 12px; color: #64748b; margin-top: 20px; text-align: center;">This code is valid for 5 minutes. Do not share this OTP with anyone.</p>
+        </div>
+        """
+        msg.attach(MIMEText(html_content, "html"))
+
+        server = smtplib.SMTP(smtp_host, smtp_port, timeout=8)
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, [email_addr], msg.as_string())
+        server.quit()
+        logger.info(f"Free SMTP Email OTP dispatched successfully to {email_addr}")
+        return True
+    except Exception as e:
+        logger.error(f"SMTP Email OTP dispatch error: {str(e)}")
+        return False
+
 def send_otp(destination: str, otp: str) -> Tuple[bool, str]:
     """
-    Dispatches 6-digit OTP via Fast2SMS API.
+    Dispatches 6-digit OTP via Email, Fast2SMS, or In-App Banner.
     """
     masked = mask_contact(destination)
     message_text = f"Your CypherBuddy Admin verification OTP is {otp}. Valid for 5 minutes."
+
+    # If destination is an email address, send free Email OTP
+    if "@" in destination:
+        if send_email_otp(destination, otp):
+            return True, f"OTP sent to email {masked}"
 
     provider = os.getenv("SMS_PROVIDER", "fast2sms").lower().strip()
     api_key = os.getenv("SMS_API_KEY", "").strip()
@@ -59,6 +108,7 @@ def send_otp(destination: str, otp: str) -> Tuple[bool, str]:
         print(f"\n[DEV OTP DISPATCH] [DESTINATION: {masked}] -> OTP: {otp}\n")
         logger.info(f"Mock OTP dispatched successfully to {masked}")
         return True, f"OTP sent to {masked}"
+
 
     # Fast2SMS Provider Integration
     try:

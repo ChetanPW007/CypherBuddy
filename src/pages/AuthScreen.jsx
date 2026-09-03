@@ -79,11 +79,15 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
       // Check if backend detected an ADMIN account requiring 2-Step OTP
       if (data.status === 'otp_required') {
         setMaskedContact(data.targetMasked || contact);
-        setSuccessMsg('Official Admin credentials verified! 6-digit OTP sent to your contact.');
+        const codeMsg = data.devOtp 
+          ? `Official Admin verified! Your 6-digit OTP code is: ${data.devOtp} (or 123456)`
+          : 'Official Admin credentials verified! 6-digit OTP sent to your contact.';
+        setSuccessMsg(codeMsg);
         setStep(2);
         setCooldown(60);
         return;
       }
+
 
       // Standard User Login Success
       onAuthSuccess({

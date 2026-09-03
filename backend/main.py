@@ -197,6 +197,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 class RegisterRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=50)
     email: EmailStr
+    phone: Optional[str] = Field(None, max_length=30)
     password: str = Field(..., min_length=8, max_length=100)
     termsAccepted: bool
 
@@ -242,7 +243,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[
         
         db = await get_database()
         if db is not None:
-            db_user = await db.users.find_one({"email": sub}) or await db.admin_users.find_one({"email": sub})
+            db_user = await db.users.find_one({"$or": [{"email": sub}, {"phone": sub}]}) or await db.admin_users.find_one({"$or": [{"email": sub}, {"phone": sub}]})
             if db_user:
                 db_user["_id"] = str(db_user.get("_id", ""))
                 return db_user
@@ -292,13 +293,14 @@ async def register(req: RegisterRequest):
         raise HTTPException(status_code=400, detail="You must accept the Privacy Policy and Terms of Service to register.")
     
     email_clean = req.email.strip().lower()
+    phone_clean = req.phone.strip() if req.phone else ""
     
     db = await get_database()
     if db is not None:
-        existing = await db.users.find_one({"email": email_clean})
+        existing = await db.users.find_one({"$or": [{"email": email_clean}, {"phone": phone_clean}]}) if phone_clean else await db.users.find_one({"email": email_clean})
         if existing:
             raise HTTPException(status_code=400, detail="Unable to create account with provided details.")
-    elif email_clean in USERS_DB:
+    elif email_clean in USERS_DB or (phone_clean and phone_clean in USERS_DB):
         raise HTTPException(status_code=400, detail="Unable to create account with provided details.")
 
     new_id = f"USR-{uuid.uuid4().hex[:6].upper()}"
@@ -306,16 +308,19 @@ async def register(req: RegisterRequest):
         "id": new_id,
         "name": req.name.strip(),
         "email": email_clean,
+        "phone": phone_clean,
         "passwordHash": hash_password(req.password),
         "role": "USER",
         "termsAcceptedAt": datetime.datetime.utcnow().isoformat()
     }
     
     USERS_DB[email_clean] = user_record
+    if phone_clean:
+        USERS_DB[phone_clean] = user_record
     if db is not None:
         await db.users.insert_one(user_record)
 
-    await log_audit_event("USER_REGISTERED", new_id, f"Registered email {email_clean}")
+    await log_audit_event("USER_REGISTERED", new_id, f"Registered email {email_clean} phone {phone_clean}")
 
     access_token = create_access_token({"sub": email_clean, "role": "USER"})
     refresh_token = create_access_token({"sub": email_clean, "type": "refresh"}, datetime.timedelta(days=7))
@@ -324,8 +329,9 @@ async def register(req: RegisterRequest):
         accessToken=access_token,
         refreshToken=refresh_token,
         role="USER",
-        user={"id": new_id, "name": req.name, "email": email_clean, "role": "USER"}
+        user={"id": new_id, "name": req.name, "email": email_clean, "phone": phone_clean, "role": "USER"}
     )
+
 
 @app.post("/api/auth/login")
 async def login(req: LoginRequest, request: Request):

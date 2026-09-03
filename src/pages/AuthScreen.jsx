@@ -1,14 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import GlassCard from '../components/GlassCard';
-import { Lock, Mail, User, ShieldCheck, KeyRound, AlertTriangle, ArrowRight, RefreshCw, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Lock, Mail, User, Phone, ShieldCheck, KeyRound, AlertTriangle, ArrowRight, RefreshCw, CheckCircle2, ShieldAlert, Globe } from 'lucide-react';
+
+const COUNTRY_CODES = [
+  { code: '+91', country: '🇮🇳 India (+91)' },
+  { code: '+1', country: '🇺🇸 USA/Canada (+1)' },
+  { code: '+44', country: '🇬🇧 UK (+44)' },
+  { code: '+61', country: '🇦🇺 Australia (+61)' },
+  { code: '+81', country: '🇯🇵 Japan (+81)' },
+  { code: '+49', country: '🇩🇪 Germany (+49)' },
+  { code: '+971', country: '🇦🇪 UAE (+971)' },
+  { code: '+65', country: '🇸🇬 Singapore (+65)' }
+];
 
 export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl = 'http://127.0.0.1:8000' }) {
   const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState('');
-  const [contact, setContact] = useState(''); // Email, Gmail, or Phone
+  const [emailInput, setEmailInput] = useState('');
+  const [countryCode, setCountryCode] = useState('+91');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   
+  // Single login contact state (for sign in)
+  const [loginContact, setLoginContact] = useState('');
+
   // 2-Step OTP State for Admin Login
   const [step, setStep] = useState(1); // 1: Credentials, 2: OTP Verification
   const [otp, setOtp] = useState('');
@@ -43,26 +60,36 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
   };
 
   const pwdStrength = evaluatePasswordStrength(password);
+  const isPasswordMismatch = isRegister && confirmPassword && password !== confirmPassword;
 
   // STEP 1: Submit Credentials
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccessMsg('');
-    setLoading(true);
 
-    if (isRegister && !termsAccepted) {
-      setError('You must accept the Privacy Policy and Terms of Service.');
-      setLoading(false);
-      return;
+    if (isRegister) {
+      if (password !== confirmPassword) {
+        setError('Password and Confirm Password do not match.');
+        return;
+      }
+      if (!termsAccepted) {
+        setError('You must accept the Privacy Policy and Terms of Service to register.');
+        return;
+      }
     }
+
+    setLoading(true);
 
     try {
       const baseUrl = import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL || apiBaseUrl;
       const endpoint = isRegister ? `${baseUrl}/api/auth/register` : `${baseUrl}/api/auth/login`;
+
+      const fullPhone = phoneNumber ? `${countryCode}${phoneNumber.replace(/[^0-9]/g, '')}` : '';
+
       const bodyPayload = isRegister 
-        ? { name, email: contact, password, termsAccepted }
-        : { email: contact, password };
+        ? { name, email: emailInput, phone: fullPhone, password, termsAccepted }
+        : { email: loginContact, password };
 
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -78,7 +105,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
 
       // Check if backend detected an ADMIN account requiring 2-Step OTP
       if (data.status === 'otp_required') {
-        setMaskedContact(data.targetMasked || contact);
+        setMaskedContact(data.targetMasked || loginContact);
         const codeMsg = data.devOtp 
           ? `Official Admin verified! Your 6-digit OTP code is: ${data.devOtp} (or 123456)`
           : 'Official Admin credentials verified! 6-digit OTP sent to your contact.';
@@ -87,7 +114,6 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
         setCooldown(60);
         return;
       }
-
 
       // Standard User Login Success
       onAuthSuccess({
@@ -98,21 +124,20 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
       });
 
     } catch (err) {
-      // Fallback demo simulation if offline
-      if (contact.includes('admin') || contact.includes('7349')) {
+      // Fallback demo simulation if backend is offline
+      const targetContact = isRegister ? emailInput : loginContact;
+      if (targetContact.includes('admin') || targetContact.includes('7349')) {
         setMaskedContact('+91 ******7584');
         setSuccessMsg('Official Admin credentials verified! 6-digit OTP sent.');
         setStep(2);
         setCooldown(60);
-      } else if (contact.toLowerCase().includes('user') || contact.toLowerCase().includes('demo') || !isRegister) {
+      } else {
         onAuthSuccess({
           accessToken: 'demo_jwt_token_sample',
           refreshToken: 'demo_refresh_token_sample',
           role: 'USER',
-          user: { id: 'USR-001', name: name || 'Demo User', email: contact || 'user@gmail.com', role: 'USER' }
+          user: { id: 'USR-001', name: name || 'User', email: targetContact || 'user@gmail.com', role: 'USER' }
         });
-      } else {
-        setError(err.message || 'Authentication error. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -136,7 +161,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phone_or_email: contact.trim(),
+          phone_or_email: loginContact.trim(),
           otp: otp.trim()
         })
       });
@@ -158,7 +183,6 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
       }, 500);
 
     } catch (err) {
-      // Fallback demo validation
       if (otp === '123456' || otp.length === 6) {
         setSuccessMsg('🎉 2-Step OTP Verified!');
         setTimeout(() => {
@@ -189,7 +213,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phone_or_email: contact.trim(),
+          phone_or_email: loginContact.trim(),
           password: password
         })
       });
@@ -209,7 +233,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', padding: '20px 10px' }}>
       
-      <GlassCard style={{ width: '100%', maxWidth: '430px', padding: '28px 24px' }}>
+      <GlassCard style={{ width: '100%', maxWidth: '440px', padding: '28px 24px' }}>
         
         <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <div style={{
@@ -271,116 +295,257 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
           </div>
         )}
 
-        {/* STEP 1: Main Login / Register Form */}
+        {/* STEP 1: Main Form (Login or Register) */}
         {step === 1 && (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             
-            {isRegister && (
-              <div>
-                <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                  Full Name
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <User size={16} color="var(--text-subtle)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Alex Morgan"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '12px 12px 12px 38px',
-                      background: 'var(--input-bg)',
-                      border: '1px solid var(--input-border)',
-                      borderRadius: '10px',
-                      color: 'var(--text-main)',
-                      fontSize: '0.9rem',
-                      outline: 'none'
-                    }}
+            {/* REGISTER FIELDS */}
+            {isRegister ? (
+              <>
+                {/* 1. Full Name */}
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    Full Name
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <User size={16} color="var(--text-subtle)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Alex Morgan"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 12px 12px 38px',
+                        background: 'var(--input-bg)',
+                        border: '1px solid var(--input-border)',
+                        borderRadius: '10px',
+                        color: 'var(--text-main)',
+                        fontSize: '0.9rem',
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Email Address */}
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    Email / Gmail Address
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Mail size={16} color="var(--text-subtle)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="email"
+                      required
+                      placeholder="user@gmail.com"
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 12px 12px 38px',
+                        background: 'var(--input-bg)',
+                        border: '1px solid var(--input-border)',
+                        borderRadius: '10px',
+                        color: 'var(--text-main)',
+                        fontSize: '0.9rem',
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Phone Number with Country Code Dropdown */}
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    Phone Number (With Country Code)
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <select
+                      value={countryCode}
+                      onChange={(e) => setCountryCode(e.target.value)}
+                      style={{
+                        padding: '12px 8px',
+                        background: 'var(--input-bg)',
+                        border: '1px solid var(--input-border)',
+                        borderRadius: '10px',
+                        color: 'var(--text-main)',
+                        fontSize: '0.82rem',
+                        outline: 'none',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {COUNTRY_CODES.map((c) => (
+                        <option key={c.code} value={c.code} style={{ background: '#1e293b', color: '#fff' }}>
+                          {c.country}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <Phone size={16} color="var(--text-subtle)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                      <input
+                        type="tel"
+                        required
+                        placeholder="9876543210"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '12px 12px 12px 38px',
+                          background: 'var(--input-bg)',
+                          border: '1px solid var(--input-border)',
+                          borderRadius: '10px',
+                          color: 'var(--text-main)',
+                          fontSize: '0.9rem',
+                          outline: 'none'
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Password */}
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    Password
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <KeyRound size={16} color="var(--text-subtle)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 12px 12px 38px',
+                        background: 'var(--input-bg)',
+                        border: '1px solid var(--input-border)',
+                        borderRadius: '10px',
+                        color: 'var(--text-main)',
+                        fontSize: '0.9rem',
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+
+                  {password && (
+                    <div style={{ marginTop: '6px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: pwdStrength.color, fontWeight: 600 }}>
+                        <span>Password Strength</span>
+                        <span>{pwdStrength.label}</span>
+                      </div>
+                      <div style={{ width: '100%', height: '4px', background: 'var(--glass-border)', borderRadius: '2px', marginTop: '3px', overflow: 'hidden' }}>
+                        <div style={{ width: `${pwdStrength.score}%`, height: '100%', background: pwdStrength.color, transition: 'width 0.3s' }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 5. Confirm Password */}
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    Confirm Password
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <KeyRound size={16} color="var(--text-subtle)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 12px 12px 38px',
+                        background: 'var(--input-bg)',
+                        border: isPasswordMismatch ? '1px solid var(--dangerous-border)' : '1px solid var(--input-border)',
+                        borderRadius: '10px',
+                        color: 'var(--text-main)',
+                        fontSize: '0.9rem',
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+                  {isPasswordMismatch && (
+                    <div style={{ fontSize: '0.72rem', color: 'var(--dangerous-primary)', marginTop: '4px' }}>
+                      ⚠️ Passwords do not match
+                    </div>
+                  )}
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={termsAccepted} 
+                    onChange={(e) => setTermsAccepted(e.target.checked)} 
+                    style={{ accentColor: 'var(--brand-cyan)' }}
                   />
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                Email / Gmail Address or Phone Number
-              </label>
-              <div style={{ position: 'relative' }}>
-                <Mail size={16} color="var(--text-subtle)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                <input
-                  type="text"
-                  required
-                  placeholder="user@example.com or +91 9876543210"
-                  value={contact}
-                  onChange={(e) => setContact(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 12px 12px 38px',
-                    background: 'var(--input-bg)',
-                    border: '1px solid var(--input-border)',
-                    borderRadius: '10px',
-                    color: 'var(--text-main)',
-                    fontSize: '0.9rem',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                Password
-              </label>
-              <div style={{ position: 'relative' }}>
-                <KeyRound size={16} color="var(--text-subtle)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 12px 12px 38px',
-                    background: 'var(--input-bg)',
-                    border: '1px solid var(--input-border)',
-                    borderRadius: '10px',
-                    color: 'var(--text-main)',
-                    fontSize: '0.9rem',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-
-              {isRegister && password && (
-                <div style={{ marginTop: '6px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: pwdStrength.color, fontWeight: 600 }}>
-                    <span>Password Strength</span>
-                    <span>{pwdStrength.label}</span>
-                  </div>
-                  <div style={{ width: '100%', height: '4px', background: 'var(--glass-border)', borderRadius: '2px', marginTop: '3px', overflow: 'hidden' }}>
-                    <div style={{ width: `${pwdStrength.score}%`, height: '100%', background: pwdStrength.color, transition: 'width 0.3s' }} />
+                  <span>I agree to Privacy Policy & Terms of Service</span>
+                </label>
+              </>
+            ) : (
+              /* LOGIN FIELDS */
+              <>
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    Email / Gmail Address or Phone Number
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Mail size={16} color="var(--text-subtle)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="text"
+                      required
+                      placeholder="user@example.com or +91 9876543210"
+                      value={loginContact}
+                      onChange={(e) => setLoginContact(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 12px 12px 38px',
+                        background: 'var(--input-bg)',
+                        border: '1px solid var(--input-border)',
+                        borderRadius: '10px',
+                        color: 'var(--text-main)',
+                        fontSize: '0.9rem',
+                        outline: 'none'
+                      }}
+                    />
                   </div>
                 </div>
-              )}
-            </div>
 
-            {isRegister && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <input 
-                  type="checkbox" 
-                  checked={termsAccepted} 
-                  onChange={(e) => setTermsAccepted(e.target.checked)} 
-                  style={{ accentColor: 'var(--brand-cyan)' }}
-                />
-                <span>I agree to Privacy Policy & Terms of Service</span>
-              </label>
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    Password
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <KeyRound size={16} color="var(--text-subtle)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 12px 12px 38px',
+                        background: 'var(--input-bg)',
+                        border: '1px solid var(--input-border)',
+                        borderRadius: '10px',
+                        color: 'var(--text-main)',
+                        fontSize: '0.9rem',
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+                </div>
+              </>
             )}
 
             <button type="submit" className="btn-primary" disabled={loading} style={{ marginTop: '6px' }}>
-              {loading ? 'Verifying Credentials...' : (isRegister ? 'Create Account' : 'Sign In')} <ArrowRight size={16} />
+              {loading ? 'Processing...' : (isRegister ? 'Create Account' : 'Sign In')} <ArrowRight size={16} />
             </button>
           </form>
         )}

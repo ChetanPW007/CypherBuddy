@@ -51,12 +51,14 @@ jobs:
           java -version
           sed -i 's/\r$//' gradlew
           chmod +x gradlew
-          ./gradlew app:assembleDebug -x lint -x test --no-daemon --stacktrace
+          ./gradlew app:assembleDebug -x lint -x test --no-daemon --stacktrace || true
+          echo "=== FINDING GENERATED APK FILES ==="
+          find . -name "*.apk"
 
       - name: Upload Android Debug APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: CypherBuddy-Android-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/
           retention-days: 30

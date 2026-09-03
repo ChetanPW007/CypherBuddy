@@ -50,6 +50,7 @@ jobs:
           ./gradlew app:assembleDebug -x lint -x test --no-daemon
 
       - name: Upload Android Debug APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: CypherBuddy-Android-APK

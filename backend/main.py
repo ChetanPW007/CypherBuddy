@@ -133,7 +133,10 @@ async def on_startup():
 
     ADMIN_USERS_DB[admin_email] = admin_record
     ADMIN_USERS_DB[admin_phone] = admin_record
-    USERS_DB[admin_email] = admin_record
+    ADMIN_USERS_DB[admin_phone.replace("+", "")] = admin_record
+    if admin_phone.startswith("+91"):
+        ADMIN_USERS_DB[admin_phone.replace("+91", "")] = admin_record
+
 
     # Seed Default User Account
     demo_user = {
@@ -357,15 +360,33 @@ async def login(req: LoginRequest, request: Request):
     If USER  -> Issues session tokens directly.
     """
     client_ip = request.client.host if request.client else "unknown"
-    contact_clean = req.email.strip().lower()
+    contact_raw = req.email.strip()
+    contact_clean = contact_raw.lower()
     
+    digits = "".join(filter(str.isdigit, contact_raw))
+    query_conditions = [{"email": contact_clean}, {"phone": contact_clean}]
+    if digits:
+        query_conditions.append({"phone": digits})
+        query_conditions.append({"phone": f"+{digits}"})
+        if len(digits) == 10:
+            query_conditions.append({"phone": f"+91{digits}"})
+            query_conditions.append({"phone": f"91{digits}"})
+        elif len(digits) == 12 and digits.startswith("91"):
+            query_conditions.append({"phone": f"+{digits}"})
+            query_conditions.append({"phone": digits[2:]})
+
     db = await get_database()
     user = None
     if db is not None:
-        user = await db.admin_users.find_one({"$or": [{"email": contact_clean}, {"phone": contact_clean}]}) or await db.users.find_one({"$or": [{"email": contact_clean}, {"phone": contact_clean}]})
+        user = await db.admin_users.find_one({"$or": query_conditions}) or await db.users.find_one({"$or": query_conditions})
 
     if not user:
-        user = ADMIN_USERS_DB.get(contact_clean) or USERS_DB.get(contact_clean)
+        for q in query_conditions:
+            val = q.get("email") or q.get("phone")
+            if val and (val in ADMIN_USERS_DB or val in USERS_DB):
+                user = ADMIN_USERS_DB.get(val) or USERS_DB.get(val)
+                break
+
 
     if not user or not verify_password(req.password, user["passwordHash"]):
         FAILED_LOGIN_ATTEMPTS.setdefault(client_ip, []).append(time.time())

@@ -1,5 +1,5 @@
 # CypherBuddy Production Security Backend API
-# Hardened Authentication (Bcrypt/JWT), RBAC (USER, PARENT, ADMIN), MongoDB Database, 2-Step OTP Admin Login, SSRF Protection & Rate Limiting
+# Hardened Authentication (Bcrypt/JWT), RBAC (USER, PARENT, ADMIN), MongoDB Database, Unified 2-Step OTP Admin Login, SSRF Protection & Rate Limiting
 
 import os
 import uuid
@@ -112,10 +112,9 @@ async def on_startup():
     db_connected = await init_db()
     db = await get_database()
 
-    # Prebuilt Official Admin Account Creation (Requirement 6 & 10)
+    # Prebuilt Official Admin Account Creation
     admin_phone = os.getenv("ADMIN_PHONE", "+917349107584").strip()
     admin_email = os.getenv("ADMIN_EMAIL", "admin@cypherbuddy.org").strip().lower()
-
     admin_pass = os.getenv("ADMIN_PASSWORD", "AdminPass123!").strip()
     
     admin_record = {
@@ -194,7 +193,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "A security validation or server error occurred. Please try again."}
     )
 
-# Pydantic Schemas
+# Pydantic Input Validation Schemas
 class RegisterRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=50)
     email: EmailStr
@@ -241,7 +240,6 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         sub = payload.get("sub")
         
-        # Check MongoDB first if connected
         db = await get_database()
         if db is not None:
             db_user = await db.users.find_one({"email": sub}) or await db.admin_users.find_one({"email": sub})
@@ -277,7 +275,6 @@ def read_root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for Render monitoring without exposing secrets."""
     db = await get_database()
     db_status = "connected" if db is not None else "standalone_mode"
     return {
@@ -286,7 +283,7 @@ async def health_check():
     }
 
 # ----------------------------------------------------
-# AUTHENTICATION ENDPOINTS (PERSISTED IN MONGODB)
+# UNIFIED AUTHENTICATION ENDPOINTS (AUTO DETECTS ADMIN & TRIGGERS OTP)
 # ----------------------------------------------------
 
 @app.post("/api/auth/register", response_model=TokenResponse)
@@ -330,25 +327,68 @@ async def register(req: RegisterRequest):
         user={"id": new_id, "name": req.name, "email": email_clean, "role": "USER"}
     )
 
-@app.post("/api/auth/login", response_model=TokenResponse)
+@app.post("/api/auth/login")
 async def login(req: LoginRequest, request: Request):
+    """
+    Unified Login Handler: Automatically detects if account is ADMIN or USER.
+    If ADMIN -> Triggers Step 2 6-Digit OTP request automatically.
+    If USER  -> Issues session tokens directly.
+    """
     client_ip = request.client.host if request.client else "unknown"
-    email_clean = req.email.strip().lower()
+    contact_clean = req.email.strip().lower()
     
     db = await get_database()
     user = None
     if db is not None:
-        user = await db.users.find_one({"email": email_clean})
+        user = await db.admin_users.find_one({"$or": [{"email": contact_clean}, {"phone": contact_clean}]}) or await db.users.find_one({"email": contact_clean})
     if not user:
-        user = USERS_DB.get(email_clean)
+        user = ADMIN_USERS_DB.get(contact_clean) or USERS_DB.get(contact_clean)
 
     if not user or not verify_password(req.password, user["passwordHash"]):
         FAILED_LOGIN_ATTEMPTS.setdefault(client_ip, []).append(time.time())
-        await log_audit_event("LOGIN_FAILED", email_clean, "Invalid credentials", client_ip)
+        await log_audit_event("LOGIN_FAILED", contact_clean, "Invalid credentials", client_ip)
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-    access_token = create_access_token({"sub": email_clean, "role": user["role"]})
-    refresh_token = create_access_token({"sub": email_clean, "type": "refresh"}, datetime.timedelta(days=7))
+    # AUTO-DETECT ADMIN ROLE -> TRIGGER 2-STEP OTP FLOW
+    if user.get("role") == "ADMIN":
+        now = time.time()
+        existing_otp = OTP_REQUESTS_DB.get(contact_clean)
+        if existing_otp and (now - existing_otp.get("last_sent", 0) < 60):
+            remaining = int(60 - (now - existing_otp.get("last_sent", 0)))
+            raise HTTPException(status_code=429, detail=f"Please wait {remaining} seconds before requesting a new OTP.")
+
+        raw_otp = generate_secure_otp()
+        hashed_otp = hash_otp(raw_otp)
+        
+        otp_record = {
+            "contact": contact_clean,
+            "hash": hashed_otp,
+            "expires_at": now + 300,
+            "attempts": 0,
+            "last_sent": now,
+            "admin_user_id": user["id"],
+            "created_at": datetime.datetime.utcnow()
+        }
+        
+        OTP_REQUESTS_DB[contact_clean] = {**otp_record, "admin_user": user}
+        if db is not None:
+            await db.otp_requests.update_one({"contact": contact_clean}, {"$set": otp_record}, upsert=True)
+
+        success, msg = send_otp(user.get("phone") or user.get("email"), raw_otp)
+        await log_audit_event("OTP_REQUESTED", user["id"], f"OTP sent to {mask_contact(contact_clean)}", client_ip)
+
+        return {
+            "status": "otp_required",
+            "message": "Admin credentials verified! 6-digit OTP sent to your contact.",
+            "targetMasked": mask_contact(user.get("phone") or user.get("email")),
+            "contact": contact_clean,
+            "role": "ADMIN",
+            "expiresInSeconds": 300
+        }
+
+    # STANDARD USER LOGIN
+    access_token = create_access_token({"sub": user["email"], "role": user["role"]})
+    refresh_token = create_access_token({"sub": user["email"], "type": "refresh"}, datetime.timedelta(days=7))
     
     await log_audit_event("LOGIN_SUCCESS", user["id"], f"Role {user['role']} logged in", client_ip)
 
@@ -360,59 +400,12 @@ async def login(req: LoginRequest, request: Request):
     )
 
 # ----------------------------------------------------
-# OFFICIAL ADMIN 2-STEP OTP AUTHENTICATION (PERSISTED IN MONGODB)
+# 2-STEP OTP VERIFICATION ENDPOINTS
 # ----------------------------------------------------
 
 @app.post("/api/auth/admin/login")
 async def admin_login(req: AdminLoginRequest, request: Request):
-    client_ip = request.client.host if request.client else "unknown"
-    contact_clean = req.phone_or_email.strip().lower()
-    
-    db = await get_database()
-    admin_user = None
-    if db is not None:
-        admin_user = await db.admin_users.find_one({"$or": [{"email": contact_clean}, {"phone": contact_clean}]})
-    if not admin_user:
-        admin_user = ADMIN_USERS_DB.get(contact_clean)
-
-    if not admin_user or not verify_password(req.password, admin_user["passwordHash"]) or admin_user.get("role") != "ADMIN":
-        FAILED_LOGIN_ATTEMPTS.setdefault(client_ip, []).append(time.time())
-        await log_audit_event("ADMIN_LOGIN_STEP1_FAILED", contact_clean, "Invalid admin credentials", client_ip)
-        raise HTTPException(status_code=401, detail="Invalid phone number or password.")
-
-    now = time.time()
-    existing_otp = OTP_REQUESTS_DB.get(contact_clean)
-    if existing_otp and (now - existing_otp.get("last_sent", 0) < 60):
-        remaining = int(60 - (now - existing_otp.get("last_sent", 0)))
-        raise HTTPException(status_code=429, detail=f"Please wait {remaining} seconds before requesting a new OTP.")
-
-    # Generate 6-digit CSPRNG OTP
-    raw_otp = generate_secure_otp()
-    hashed_otp = hash_otp(raw_otp)
-    
-    otp_record = {
-        "contact": contact_clean,
-        "hash": hashed_otp,
-        "expires_at": now + 300,
-        "attempts": 0,
-        "last_sent": now,
-        "admin_user_id": admin_user["id"],
-        "created_at": datetime.datetime.utcnow()
-    }
-    
-    OTP_REQUESTS_DB[contact_clean] = {**otp_record, "admin_user": admin_user}
-    if db is not None:
-        await db.otp_requests.update_one({"contact": contact_clean}, {"$set": otp_record}, upsert=True)
-
-    success, msg = send_otp(admin_user.get("phone") or admin_user.get("email"), raw_otp)
-    await log_audit_event("OTP_REQUESTED", admin_user["id"], f"OTP sent to {mask_contact(contact_clean)}", client_ip)
-
-    return {
-        "status": "otp_sent",
-        "message": "Step 1 verification successful. OTP sent to registered admin contact.",
-        "targetMasked": mask_contact(admin_user.get("phone") or admin_user.get("email")),
-        "expiresInSeconds": 300
-    }
+    return await login(LoginRequest(email=req.phone_or_email, password=req.password), request)
 
 @app.post("/api/auth/admin/verify-otp", response_model=TokenResponse)
 async def admin_verify_otp(req: AdminVerifyOtpRequest, request: Request):
@@ -452,7 +445,7 @@ async def admin_verify_otp(req: AdminVerifyOtpRequest, request: Request):
         await log_audit_event("OTP_VERIFY_FAILED", contact_clean, f"Attempt {otp_entry['attempts']}/5 failed", client_ip)
         raise HTTPException(status_code=400, detail="Invalid or expired OTP.")
 
-    # ONE-TIME USE: Delete OTP record immediately after successful verification
+    # ONE-TIME USE: Delete OTP record immediately after verification
     admin_user = otp_entry.get("admin_user")
     if not admin_user and db is not None:
         admin_user = await db.admin_users.find_one({"id": otp_entry.get("admin_user_id")})
@@ -483,7 +476,7 @@ async def admin_verify_otp(req: AdminVerifyOtpRequest, request: Request):
 
 @app.post("/api/auth/admin/resend-otp")
 async def admin_resend_otp(req: AdminLoginRequest, request: Request):
-    return await admin_login(req, request)
+    return await login(LoginRequest(email=req.phone_or_email, password=req.password), request)
 
 @app.post("/api/auth/logout")
 async def logout(user: Dict[str, Any] = Depends(get_current_user)):
@@ -572,7 +565,7 @@ async def scan_file(file: UploadFile = File(...), user: Dict[str, Any] = Depends
     return result
 
 # ----------------------------------------------------
-# ADMIN DASHBOARD & TELEMETRY ENDPOINTS (READS FROM MONGODB)
+# ADMIN DASHBOARD & TELEMETRY ENDPOINTS
 # ----------------------------------------------------
 
 @app.get("/api/admin/dashboard")

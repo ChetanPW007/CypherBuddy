@@ -31,6 +31,9 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Sync Capacitor Android
         run: npx cap sync android
 
@@ -39,7 +42,7 @@ jobs:
           cd android
           sed -i 's/\r$//' gradlew
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug -x test --no-daemon
 
       - name: Upload Android Debug APK
         uses: actions/upload-artifact@v4

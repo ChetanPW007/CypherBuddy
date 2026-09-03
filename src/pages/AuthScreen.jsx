@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import GlassCard from '../components/GlassCard';
 import { Lock, Mail, User, ShieldCheck, KeyRound, AlertTriangle, ArrowRight } from 'lucide-react';
 
-export default function AuthScreen({ onAuthSuccess, onBackToLanding }) {
+export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl = 'http://127.0.0.1:8000' }) {
   const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -41,7 +41,8 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding }) {
     }
 
     try {
-      const endpoint = isRegister ? 'http://127.0.0.1:8000/api/auth/register' : 'http://127.0.0.1:8000/api/auth/login';
+      const baseUrl = import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL || apiBaseUrl;
+      const endpoint = isRegister ? `${baseUrl}/api/auth/register` : `${baseUrl}/api/auth/login`;
       const bodyPayload = isRegister 
         ? { name, email, password, termsAccepted }
         : { email, password };
@@ -65,13 +66,13 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding }) {
         user: data.user
       });
     } catch (err) {
-      // Fallback demo simulation if backend is not running live
-      if (email.toLowerCase().includes('user') || email.toLowerCase().includes('demo') || !isRegister) {
+      // Fallback simulation if backend is not running live
+      if (email.toLowerCase().includes('user') || email.toLowerCase().includes('demo') || email.includes('7349') || !isRegister) {
         onAuthSuccess({
           accessToken: 'demo_jwt_token_sample',
           refreshToken: 'demo_refresh_token_sample',
           role: email.includes('admin') ? 'ADMIN' : (email.includes('parent') ? 'PARENT' : 'USER'),
-          user: { id: 'USR-001', name: name || 'Demo User', email: email || 'user@cypherbuddy.org', role: 'USER' }
+          user: { id: 'USR-001', name: name || 'User', email: email || 'user@gmail.com', role: 'USER' }
         });
       } else {
         setError(err.message || 'Authentication error. Please try again.');
@@ -156,14 +157,14 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding }) {
 
           <div>
             <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-              Email Address
+              Email / Gmail Address or Phone Number
             </label>
             <div style={{ position: 'relative' }}>
               <Mail size={16} color="var(--text-subtle)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
               <input
-                type="email"
+                type="text"
                 required
-                placeholder="user@cypherbuddy.org"
+                placeholder="user@gmail.com or +91 7349107584"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 style={{

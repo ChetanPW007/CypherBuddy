@@ -362,7 +362,8 @@ async def login(req: LoginRequest, request: Request):
     db = await get_database()
     user = None
     if db is not None:
-        user = await db.admin_users.find_one({"$or": [{"email": contact_clean}, {"phone": contact_clean}]}) or await db.users.find_one({"email": contact_clean})
+        user = await db.admin_users.find_one({"$or": [{"email": contact_clean}, {"phone": contact_clean}]}) or await db.users.find_one({"$or": [{"email": contact_clean}, {"phone": contact_clean}]})
+
     if not user:
         user = ADMIN_USERS_DB.get(contact_clean) or USERS_DB.get(contact_clean)
 

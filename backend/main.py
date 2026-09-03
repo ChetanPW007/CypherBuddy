@@ -394,10 +394,13 @@ async def login(req: LoginRequest, request: Request):
                 break
 
 
-    if not user or not verify_password(req.password, user["passwordHash"]):
+    clean_pass = req.password.strip()
+    if not user or not verify_password(clean_pass, user["passwordHash"]):
         FAILED_LOGIN_ATTEMPTS.setdefault(client_ip, []).append(time.time())
         await log_audit_event("LOGIN_FAILED", contact_clean, "Invalid credentials", client_ip)
+        logger.warning(f"Login failed for contact: '{contact_clean}' (User found: {user is not None})")
         raise HTTPException(status_code=401, detail="Invalid email or password.")
+
 
     # AUTO-DETECT ADMIN ROLE -> TRIGGER 2-STEP OTP FLOW
     if user.get("role") == "ADMIN":

@@ -124,21 +124,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
       });
 
     } catch (err) {
-      // Fallback demo simulation if backend is offline
-      const targetContact = isRegister ? emailInput : loginContact;
-      if (targetContact.includes('admin') || targetContact.includes('7349')) {
-        setMaskedContact('+91 ******7584');
-        setSuccessMsg('Official Admin credentials verified! 6-digit OTP sent.');
-        setStep(2);
-        setCooldown(60);
-      } else {
-        onAuthSuccess({
-          accessToken: 'demo_jwt_token_sample',
-          refreshToken: 'demo_refresh_token_sample',
-          role: 'USER',
-          user: { id: 'USR-001', name: name || 'User', email: targetContact || 'user@gmail.com', role: 'USER' }
-        });
-      }
+      setError(err.message || 'Authentication failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -183,23 +169,12 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
       }, 500);
 
     } catch (err) {
-      if (otp === '123456' || otp.length === 6) {
-        setSuccessMsg('🎉 2-Step OTP Verified!');
-        setTimeout(() => {
-          onAuthSuccess({
-            accessToken: 'admin_jwt_token_sample',
-            refreshToken: 'admin_refresh_token_sample',
-            role: 'ADMIN',
-            user: { id: 'ADM-001', name: 'Official CypherBuddy Admin', email: 'admin@cypherbuddy.org', phone: '+917349107584', role: 'ADMIN' }
-          });
-        }, 500);
-      } else {
-        setError(err.message || 'Invalid or expired OTP.');
-      }
+      setError(err.message || 'Invalid or expired OTP.');
     } finally {
       setLoading(false);
     }
   };
+
 
   // Resend OTP
   const handleResendOtp = async () => {

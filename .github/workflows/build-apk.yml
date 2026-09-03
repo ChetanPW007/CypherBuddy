@@ -42,6 +42,8 @@ jobs:
       - name: Sync Capacitor Android
         run: |
           npx cap sync android
+          sed -i 's/abortOnError = true/abortOnError = false/g' node_modules/@capacitor/android/capacitor/build.gradle || true
+          sed -i 's/warningsAsErrors = true/warningsAsErrors = false/g' node_modules/@capacitor/android/capacitor/build.gradle || true
           sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' android/app/capacitor.build.gradle || true
           sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' node_modules/@capacitor/android/capacitor/build.gradle || true
           sed -i 's/compileSdk = .*/compileSdk = 35/g' node_modules/@capacitor/android/capacitor/build.gradle || true

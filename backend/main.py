@@ -113,8 +113,9 @@ async def on_startup():
     db = await get_database()
 
     # Prebuilt Official Admin Account Creation (Requirement 6 & 10)
-    admin_phone = os.getenv("ADMIN_PHONE", "+919876543210").strip()
+    admin_phone = os.getenv("ADMIN_PHONE", "+917349107584").strip()
     admin_email = os.getenv("ADMIN_EMAIL", "admin@cypherbuddy.org").strip().lower()
+
     admin_pass = os.getenv("ADMIN_PASSWORD", "AdminPass123!").strip()
     
     admin_record = {

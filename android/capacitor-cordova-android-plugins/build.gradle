@@ -47,5 +47,7 @@ dependencies {
 apply from: "cordova.variables.gradle"
 
 for (def func : cdvPluginPostBuildExtras) {
-    func()
+    if (func instanceof Closure) {
+        func()
+    }
 }

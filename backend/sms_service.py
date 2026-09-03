@@ -20,7 +20,6 @@ OTP_HASH_SALT = os.getenv("JWT_SECRET", "CYPHERBUDDY_OTP_SECURE_SALT_2026")
 
 def generate_secure_otp() -> str:
     """Generates a cryptographically secure 6-digit OTP string."""
-    # Use Python secrets module for CSPRNG
     return f"{secrets.randbelow(900000) + 100000}"
 
 def hash_otp(otp: str) -> str:
@@ -51,23 +50,65 @@ def mask_contact(contact: str) -> str:
 def send_otp(destination: str, otp: str) -> Tuple[bool, str]:
     """
     Dispatches OTP via configured SMS/Email provider.
-    NEVER logs the plaintext OTP value.
     """
     masked = mask_contact(destination)
-    message_text = f"Your CypherBuddy Admin verification OTP is {otp}. It expires in 5 minutes. Do not share this OTP."
+    message_text = f"Your CypherBuddy Admin verification OTP is {otp}. Valid for 5 minutes."
 
-    if SMS_PROVIDER == "mock" or os.getenv("ENVIRONMENT") == "development":
-        # In development mode, print to server stdout for local developer testing
+    provider = os.getenv("SMS_PROVIDER", "mock").lower().strip()
+    api_key = os.getenv("SMS_API_KEY", "").strip()
+
+    if provider == "mock" or os.getenv("ENVIRONMENT") == "development" or not api_key:
         print(f"\n[DEV OTP DISPATCH] [DESTINATION: {masked}] -> OTP: {otp}\n")
         logger.info(f"Mock OTP dispatched successfully to {masked}")
         return True, f"OTP sent to {masked}"
 
-    elif SMS_PROVIDER == "twilio":
-        # Twilio API Integration
+    elif provider == "fast2sms":
+        # Fast2SMS API Integration
+        try:
+            import requests
+            
+            # Clean 10-digit Indian phone number (remove +91 / +)
+            digits_only = "".join(filter(str.isdigit, destination))
+            if len(digits_only) > 10 and digits_only.startswith("91"):
+                digits_only = digits_only[2:]
+            
+            url = "https://www.fast2sms.com/dev/bulkV2"
+            headers = {
+                'authorization': api_key,
+                'Content-Type': "application/x-www-form-urlencoded"
+            }
+            
+            # Attempt 1: OTP Route
+            payload_otp = f"variables_values={otp}&route=otp&numbers={digits_only}"
+            res = requests.post(url, data=payload_otp, headers=headers, timeout=8)
+            res_json = res.json() if res.ok else {}
+            
+            if res.status_code == 200 and res_json.get("return") is True:
+                logger.info(f"Fast2SMS OTP route delivered to {masked}")
+                return True, f"OTP sent to {masked}"
+
+            # Attempt 2: Quick SMS Route Fallback
+            payload_q = f"message={message_text}&language=english&route=q&numbers={digits_only}"
+            res_q = requests.post(url, data=payload_q, headers=headers, timeout=8)
+            res_q_json = res_q.json() if res_q.ok else {}
+
+            if res_q.status_code == 200 and res_q_json.get("return") is True:
+                logger.info(f"Fast2SMS Quick SMS route delivered to {masked}")
+                return True, f"OTP sent to {masked}"
+
+            err_msg = res_json.get("message") or res_q_json.get("message") or "Fast2SMS delivery error"
+            logger.error(f"Fast2SMS API response error: {err_msg}")
+            return False, f"SMS Delivery failed: {err_msg}"
+
+        except Exception as e:
+            logger.error(f"Fast2SMS Exception: {str(e)}")
+            return False, "Failed to deliver SMS via Fast2SMS."
+
+    elif provider == "twilio":
         try:
             from twilio.rest import Client
-            account_sid = SMS_API_KEY
-            auth_token = SMS_API_SECRET
+            account_sid = api_key
+            auth_token = os.getenv("SMS_API_SECRET", "")
             client = Client(account_sid, auth_token)
             client.messages.create(
                 body=message_text,
@@ -78,28 +119,8 @@ def send_otp(destination: str, otp: str) -> Tuple[bool, str]:
             return True, f"OTP sent to {masked}"
         except Exception as e:
             logger.error(f"Twilio SMS delivery error for {masked}: {str(e)}")
-            return False, "Failed to deliver SMS. Please try again later."
-
-    elif SMS_PROVIDER == "fast2sms":
-        # Fast2SMS API Integration
-        try:
-            import requests
-            url = "https://www.fast2sms.com/dev/bulkV2"
-            payload = f"variables_values={otp}&route=otp&numbers={destination}"
-            headers = {
-                'authorization': SMS_API_KEY,
-                'Content-Type': "application/x-www-form-urlencoded"
-            }
-            res = requests.post(url, data=payload, headers=headers, timeout=5)
-            if res.status_code == 200:
-                logger.info(f"Fast2SMS OTP sent to {masked}")
-                return True, f"OTP sent to {masked}"
-            return False, "SMS provider returned delivery failure."
-        except Exception as e:
-            logger.error(f"Fast2SMS error: {str(e)}")
-            return False, "Failed to deliver SMS."
+            return False, "Failed to deliver SMS via Twilio."
 
     else:
-        # Fallback to safe log dispatch
         logger.info(f"Default OTP dispatch trigger for {masked}")
         return True, f"OTP dispatched to {masked}"

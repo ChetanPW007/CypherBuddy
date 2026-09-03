@@ -42,7 +42,9 @@ REFRESH_TOKEN_EXPIRE_DAYS = 7
 # Environment Domain Configuration
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://cypherbuddy.vercel.app")
 CORS_ORIGINS = [
-    FRONTEND_URL.rstrip("/"),
+    "*",
+    "https://cypherbuddy-opal.vercel.app",
+    "https://cypherbuddy.vercel.app",
     "http://localhost:5173",
     "http://127.0.0.1:5173"
 ]
@@ -72,11 +74,13 @@ app = FastAPI(
 # CORS Policy configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_origins=["*"],
+    allow_origin_regex=r"https://.*\.vercel\.app|http://.*",
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
 
 # In-Memory Fallback State (Synchronized with MongoDB when available)
 USERS_DB: Dict[str, Dict[str, Any]] = {}
@@ -159,6 +163,13 @@ async def on_shutdown():
 # Rate Limiting & Security Headers Middleware
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        response = JSONResponse(content={"status": "ok"})
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        return response
+
     client_ip = request.client.host if request.client else "unknown"
     
     if request.url.path in ["/api/auth/login", "/api/auth/admin/login"] and request.method == "POST":
@@ -168,21 +179,26 @@ async def security_headers_middleware(request: Request, call_next):
         FAILED_LOGIN_ATTEMPTS[client_ip] = attempts
         if len(attempts) >= 5:
             logger.warning(f"Rate limit lockout for IP {client_ip} on path {request.url.path}")
-            return JSONResponse(
+            res = JSONResponse(
                 status_code=429,
                 content={"detail": "Too many failed login attempts. Temporarily locked for 5 minutes."}
             )
+            res.headers["Access-Control-Allow-Origin"] = "*"
+            return res
 
     response = await call_next(request)
     
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com;"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     
     return response
+
 
 # Global Exception Handler
 @app.exception_handler(Exception)

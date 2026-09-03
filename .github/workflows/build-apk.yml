@@ -45,9 +45,10 @@ jobs:
           cd android
           sed -i 's/\r$//' gradlew
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace -x test --no-daemon
+          ./gradlew app:assembleDebug --stacktrace -x test --no-daemon
 
       - name: Upload Android Debug APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: CypherBuddy-Android-APK

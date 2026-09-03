@@ -50,7 +50,7 @@ jobs:
           java -version
           sed -i 's/\r$//' gradlew
           chmod +x gradlew
-          ./gradlew app:assembleDebug -x lint -x test --no-daemon
+          ./gradlew app:assembleDebug -x lint -x test --no-daemon --info > build.log 2>&1 || (tail -n 100 build.log && false)
 
       - name: Upload Android Debug APK
         if: always()

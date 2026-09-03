@@ -17,7 +17,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
@@ -26,17 +26,16 @@ jobs:
         run: npm run build
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Copy & Sync Capacitor Android
-        run: |
-          npx @capacitor/cli sync android
+      - name: Sync Capacitor Android
+        run: npx cap sync android
 
       - name: Build Android APK
         run: |

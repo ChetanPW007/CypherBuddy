@@ -75,27 +75,36 @@ def send_otp(destination: str, otp: str) -> Tuple[bool, str]:
             'Content-Type': "application/x-www-form-urlencoded"
         }
         
-        # Attempt 1: OTP Route
+        # Attempt 1: OTP Route (URL Encoded)
         payload_otp = f"variables_values={otp}&route=otp&numbers={digits_only}"
         res = requests.post(url, data=payload_otp, headers=headers, timeout=8)
-        res_json = res.json() if res.ok else {}
+        res_json = res.json() if res.content else {}
         
         if res.status_code == 200 and res_json.get("return") is True:
             logger.info(f"Fast2SMS OTP route delivered to {masked}")
             return True, f"OTP sent to {masked}"
 
-        # Attempt 2: Quick SMS Route Fallback
+        # Attempt 2: OTP Route (JSON Payload)
+        headers_json = {'authorization': api_key, 'Content-Type': "application/json"}
+        res_j = requests.post(url, json={"route": "otp", "variables_values": str(otp), "numbers": digits_only}, headers=headers_json, timeout=8)
+        res_j_json = res_j.json() if res_j.content else {}
+        if res_j.status_code == 200 and res_j_json.get("return") is True:
+            logger.info(f"Fast2SMS JSON OTP route delivered to {masked}")
+            return True, f"OTP sent to {masked}"
+
+        # Attempt 3: Quick SMS Route Fallback
         payload_q = f"message={message_text}&language=english&route=q&numbers={digits_only}"
         res_q = requests.post(url, data=payload_q, headers=headers, timeout=8)
-        res_q_json = res_q.json() if res_q.ok else {}
+        res_q_json = res_q.json() if res_q.content else {}
 
         if res_q.status_code == 200 and res_q_json.get("return") is True:
             logger.info(f"Fast2SMS Quick SMS route delivered to {masked}")
             return True, f"OTP sent to {masked}"
 
-        err_msg = res_json.get("message") or res_q_json.get("message") or "Fast2SMS delivery error"
+        err_msg = res_json.get("message") or res_j_json.get("message") or res_q_json.get("message") or "Fast2SMS delivery error"
         logger.error(f"Fast2SMS API response error: {err_msg}")
         return False, f"SMS Delivery failed: {err_msg}"
+
 
     except Exception as e:
         logger.error(f"Fast2SMS Exception: {str(e)}")

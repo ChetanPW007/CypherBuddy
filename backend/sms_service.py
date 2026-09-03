@@ -106,38 +106,35 @@ def send_otp(destination: str, otp: str) -> Tuple[bool, str]:
 
     elif provider == "twilio":
         try:
+            import requests
             account_sid = api_key or os.getenv("TWILIO_ACCOUNT_SID", "").strip()
             auth_token = os.getenv("SMS_API_SECRET", "").strip() or os.getenv("TWILIO_AUTH_TOKEN", "").strip()
             from_phone = os.getenv("TWILIO_PHONE_NUMBER", "").strip() or os.getenv("SMS_SENDER_ID", "").strip()
             
-            # Format destination number to E.164 (e.g. +917349107584)
             formatted_dest = destination if destination.startswith("+") else f"+{destination}"
 
-            try:
-                from twilio.rest import Client
-                client = Client(account_sid, auth_token)
-                client.messages.create(body=message_text, from_=from_phone, to=formatted_dest)
+            twilio_url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
+            res = requests.post(
+                twilio_url,
+                data={"From": from_phone, "To": formatted_dest, "Body": message_text},
+                auth=(account_sid, auth_token),
+                timeout=8
+            )
+            if res.status_code in (200, 201):
                 logger.info(f"Twilio OTP sent to {masked}")
                 return True, f"OTP sent to {masked}"
-            except ImportError:
-                import requests
-                twilio_url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
-                res = requests.post(
-                    twilio_url,
-                    data={"From": from_phone, "To": formatted_dest, "Body": message_text},
-                    auth=(account_sid, auth_token),
-                    timeout=8
-                )
-                if res.status_code in (200, 201):
-                    logger.info(f"Twilio HTTP API OTP sent to {masked}")
-                    return True, f"OTP sent to {masked}"
-                else:
-                    err = res.json().get("message", "Twilio API error")
-                    logger.error(f"Twilio HTTP error: {err}")
-                    return False, f"Twilio delivery failed: {err}"
+            else:
+                try:
+                    err_json = res.json()
+                    err_msg = err_json.get("message", f"HTTP {res.status_code}")
+                except Exception:
+                    err_msg = f"HTTP {res.status_code}"
+                logger.error(f"Twilio delivery error: {err_msg}")
+                return False, f"Twilio SMS delivery failed: {err_msg}"
         except Exception as e:
             logger.error(f"Twilio SMS delivery error for {masked}: {str(e)}")
             return False, "Failed to deliver SMS via Twilio."
+
 
 
     else:

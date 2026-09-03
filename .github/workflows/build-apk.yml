@@ -40,7 +40,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Sync Capacitor Android
-        run: npx cap sync android
+        run: |
+          npx cap sync android
+          sed -i '/cordova.variables.gradle/d' android/app/capacitor.build.gradle || true
 
       - name: Build Android APK
         env:

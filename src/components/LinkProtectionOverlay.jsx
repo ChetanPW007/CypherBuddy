@@ -39,14 +39,18 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
           const data = response.data;
           setResult(data);
 
-          // LOW RISK AUTO-OPEN BEHAVIOR (Section 11 & 12)
+          // LOW RISK / SAFE: AUTO-OPEN IN CHROME WITHOUT ENTERING APP
           if (data.recommended_action === 'allow' || data.risk_level === 'low') {
             setTimeout(() => {
               if (isMounted) {
-                window.open(targetUrl, '_system') || (window.location.href = targetUrl);
+                try {
+                  window.open(targetUrl, '_system') || (window.location.href = targetUrl);
+                } catch (e) {
+                  window.location.href = targetUrl;
+                }
                 onClose();
               }
-            }, 1400);
+            }, 1000);
           }
         } else {
           setError(true);
@@ -67,284 +71,204 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
 
   if (!targetUrl) return null;
 
-  // SAFE / LOW RISK FLOATING BANNER (Section 12)
-  if (!analyzing && result && (result.risk_level === 'low' || result.recommended_action === 'allow')) {
-    return (
-      <div style={{
-        position: 'fixed',
-        top: '20px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 9999,
-        width: '90%',
-        maxWidth: '380px',
-        background: 'var(--glass-card)',
-        backdropFilter: 'blur(20px)',
-        border: '1px solid var(--safe-border)',
-        borderRadius: '16px',
-        padding: '12px 16px',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        animation: 'slideInRight 0.3s ease'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <ShieldCheck size={24} color="var(--safe-primary)" />
-          <div>
-            <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--safe-primary)' }}>
-              🛡️ CypherBuddy
-            </div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', fontWeight: 600 }}>
-              ✓ Checked — Low Risk (Opening...)
-            </div>
-          </div>
-        </div>
-        <ExternalLink size={16} color="var(--text-subtle)" />
-      </div>
-    );
-  }
-
   return (
     <div style={{
       position: 'fixed',
       inset: 0,
-      zIndex: 9999,
-      background: 'rgba(3, 7, 18, 0.75)',
-      backdropFilter: 'blur(8px)',
+      zIndex: 99999,
+      background: 'rgba(3, 10, 26, 0.45)',
+      backdropFilter: 'blur(10px)',
+      WebkitBackdropFilter: 'blur(10px)',
+      boxShadow: 'inset 0 0 120px rgba(56, 189, 248, 0.25)',
       display: 'flex',
+      flexDirection: 'column',
       alignItems: 'center',
-      justifyContent: 'center',
-      padding: '16px'
+      justifyContent: 'flex-start',
+      padding: '24px 16px',
+      animation: 'fadeIn 0.2s ease'
     }}>
-      <GlassCard style={{ width: '100%', maxWidth: '440px', padding: '24px 20px' }}>
-        
-        {/* CHECKING STATE */}
-        {analyzing && (
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <RefreshCw size={36} color="var(--brand-cyan)" className="spin" style={{ marginBottom: '14px' }} />
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '0 0 6px 0' }}>
-              🛡️ CypherBuddy Security Shield
-            </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
-              Analyzing link security details...
-            </p>
-            <div style={{
-              fontSize: '0.78rem',
-              color: 'var(--brand-cyan)',
-              marginTop: '10px',
-              wordBreak: 'break-all',
-              fontFamily: 'monospace'
-            }}>
+      
+      {/* SCANNING / ANALYSIS FLOATING TOP BANNER */}
+      {analyzing && (
+        <div style={{
+          width: '100%',
+          maxWidth: '420px',
+          background: 'rgba(15, 23, 42, 0.95)',
+          border: '1px solid rgba(56, 189, 248, 0.5)',
+          boxShadow: '0 12px 40px rgba(56, 189, 248, 0.3)',
+          borderRadius: '20px',
+          padding: '16px 20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '14px',
+          animation: 'slideInRight 0.3s ease'
+        }}>
+          <RefreshCw size={26} color="#38bdf8" className="spin" />
+          <div style={{ flex: 1, overflow: 'hidden' }}>
+            <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#38bdf8' }}>
+              🛡️ CypherBuddy Shield Scanning...
+            </div>
+            <div style={{ fontSize: '0.78rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'monospace' }}>
               {targetUrl}
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* OFFLINE / ANALYSIS FAILED STATE (Section 25) */}
-        {!analyzing && (error || !result) && (
-          <div style={{ textAlign: 'center' }}>
-            <div style={{
-              background: 'var(--suspicious-bg)',
-              width: '60px',
-              height: '60px',
-              borderRadius: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 14px auto',
-              border: '1px solid var(--suspicious-border)'
-            }}>
-              <AlertTriangle size={32} color="var(--suspicious-primary)" />
+      {/* SAFE / LOW RISK FLOATING SUCCESS BANNER */}
+      {!analyzing && result && (result.risk_level === 'low' || result.recommended_action === 'allow') && (
+        <div style={{
+          width: '100%',
+          maxWidth: '420px',
+          background: 'rgba(6, 78, 59, 0.95)',
+          border: '1px solid rgba(52, 211, 153, 0.6)',
+          boxShadow: '0 12px 40px rgba(16, 185, 129, 0.35)',
+          borderRadius: '20px',
+          padding: '16px 20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          animation: 'slideInRight 0.3s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <ShieldCheck size={28} color="#34d399" />
+            <div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#34d399' }}>
+                ✓ Verified Safe Link
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 600 }}>
+                Opening automatically in Chrome...
+              </div>
             </div>
+          </div>
+          <ExternalLink size={18} color="#34d399" />
+        </div>
+      )}
 
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--suspicious-primary)', margin: '0 0 6px 0' }}>
+      {/* RISKY / DANGEROUS / SUSPICIOUS TOP BANNER & EXPANDED CARD */}
+      {!analyzing && result && (result.risk_level === 'dangerous' || result.risk_level === 'suspicious') && (
+        <GlassCard style={{
+          width: '100%',
+          maxWidth: '440px',
+          padding: '24px 20px',
+          border: result.risk_level === 'dangerous' ? '1px solid rgba(244, 63, 94, 0.6)' : '1px solid rgba(245, 158, 11, 0.6)',
+          boxShadow: result.risk_level === 'dangerous' ? '0 16px 50px rgba(244, 63, 94, 0.35)' : '0 16px 50px rgba(245, 158, 11, 0.35)',
+          animation: 'slideInRight 0.3s ease',
+          marginTop: '10px'
+        }}>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+            {result.risk_level === 'dangerous' ? (
+              <ShieldAlert size={34} color="#f43f5e" />
+            ) : (
+              <AlertTriangle size={34} color="#f59e0b" />
+            )}
+            <div>
+              <h3 style={{
+                fontSize: '1.25rem',
+                fontWeight: 800,
+                color: result.risk_level === 'dangerous' ? '#f43f5e' : '#f59e0b',
+                margin: 0
+              }}>
+                {result.risk_level === 'dangerous' ? '🔴 DANGEROUS LINK BLOCKED' : '🟠 SUSPICIOUS LINK DETECTED'}
+              </h3>
+              <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                Threat Risk Score: <strong>{result.risk_score}/100</strong>
+              </div>
+            </div>
+          </div>
+
+          <div style={{
+            fontSize: '0.8rem',
+            color: '#f8fafc',
+            background: 'rgba(0,0,0,0.3)',
+            padding: '10px 12px',
+            borderRadius: '10px',
+            wordBreak: 'break-all',
+            fontFamily: 'monospace',
+            marginBottom: '14px'
+          }}>
+            {targetUrl}
+          </div>
+
+          {/* Reasons List */}
+          {result.reasons && result.reasons.length > 0 && (
+            <div style={{
+              padding: '12px',
+              borderRadius: '12px',
+              background: result.risk_level === 'dangerous' ? 'rgba(244, 63, 94, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+              border: result.risk_level === 'dangerous' ? '1px solid rgba(244, 63, 94, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
+              marginBottom: '18px'
+            }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: result.risk_level === 'dangerous' ? '#f43f5e' : '#f59e0b', marginBottom: '4px' }}>
+                Detected Security Warnings:
+              </div>
+              {result.reasons.map((r, i) => (
+                <div key={i} style={{ fontSize: '0.78rem', color: '#f1f5f9', marginTop: '3px' }}>
+                  • {r}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <button 
+              onClick={onClose}
+              className="btn-primary"
+              style={{
+                background: result.risk_level === 'dangerous' ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'var(--suspicious-primary)',
+                padding: '14px',
+                fontSize: '0.92rem'
+              }}
+            >
+              CANCEL & BLOCK (SAFE CHOICE)
+            </button>
+
+            {onViewReport && (
+              <button 
+                onClick={() => onViewReport(result.analysis_details || result)}
+                className="btn-secondary"
+                style={{ width: '100%', padding: '12px', fontSize: '0.85rem', borderColor: 'rgba(56, 189, 248, 0.4)', color: '#38bdf8' }}
+              >
+                <FileText size={16} /> Open Full CypherBuddy Security Audit Report
+              </button>
+            )}
+          </div>
+
+        </GlassCard>
+      )}
+
+      {/* OFFLINE / ERROR STATE */}
+      {!analyzing && (error || !result) && (
+        <GlassCard style={{ width: '100%', maxWidth: '440px', padding: '24px 20px', marginTop: '10px' }}>
+          <div style={{ textAlign: 'center' }}>
+            <AlertTriangle size={36} color="#f59e0b" style={{ margin: '0 auto 10px auto' }} />
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#f59e0b', margin: '0 0 6px 0' }}>
               Analysis Unavailable
             </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
-              CypherBuddy could not complete the security check for this link.
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '16px' }}>
+              CypherBuddy could not verify link security.
             </p>
-
-            <div style={{
-              padding: '10px',
-              borderRadius: '10px',
-              background: 'var(--input-bg)',
-              fontSize: '0.78rem',
-              wordBreak: 'break-all',
-              marginBottom: '20px',
-              fontFamily: 'monospace'
-            }}>
-              {targetUrl}
-            </div>
-
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button 
-                onClick={onClose}
-                className="btn-secondary"
-                style={{ flex: 1, padding: '12px' }}
-              >
-                Cancel (Safe Choice)
+              <button onClick={onClose} className="btn-secondary" style={{ flex: 1, padding: '12px' }}>
+                Cancel (Safe)
               </button>
               <button 
                 onClick={() => {
                   window.open(targetUrl, '_system') || (window.location.href = targetUrl);
                   onClose();
                 }}
-                className="btn-primary"
-                style={{ flex: 1, padding: '12px', background: 'var(--suspicious-primary)' }}
+                className="btn-primary" 
+                style={{ flex: 1, padding: '12px', background: '#f59e0b' }}
               >
                 Open Anyway
               </button>
             </div>
           </div>
-        )}
+        </GlassCard>
+      )}
 
-        {/* SUSPICIOUS LINK STATE (Section 13) */}
-        {!analyzing && result && result.risk_level === 'suspicious' && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-              <AlertTriangle size={28} color="var(--suspicious-primary)" />
-              <div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--suspicious-primary)', margin: 0 }}>
-                  🟠 SUSPICIOUS LINK
-                </h3>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Risk Score: <strong>{result.risk_score}/100</strong>
-                </div>
-              </div>
-            </div>
-
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
-              Something about this link looks unusual. Please verify before opening.
-            </p>
-
-            {/* Reasons List */}
-            {result.reasons && result.reasons.length > 0 && (
-              <div style={{
-                padding: '12px',
-                borderRadius: '12px',
-                background: 'var(--suspicious-bg)',
-                border: '1px solid var(--suspicious-border)',
-                marginBottom: '16px'
-              }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--suspicious-primary)', marginBottom: '4px' }}>
-                  Possible Reasons:
-                </div>
-                {result.reasons.map((r, i) => (
-                  <div key={i} style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginTop: '2px' }}>
-                    • {r}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '10px' }}>
-              {onViewReport && (
-                <button 
-                  onClick={() => onViewReport(result.analysis_details || result)}
-                  className="btn-secondary"
-                  style={{ flex: 1, padding: '12px', fontSize: '0.85rem' }}
-                >
-                  <FileText size={16} /> View Report
-                </button>
-              )}
-              <button 
-                onClick={() => {
-                  window.open(targetUrl, '_system') || (window.location.href = targetUrl);
-                  onClose();
-                }}
-                className="btn-primary"
-                style={{ flex: 1, padding: '12px', fontSize: '0.85rem', background: 'var(--suspicious-primary)' }}
-              >
-                Continue <ArrowRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* DANGEROUS LINK STATE (Section 14) */}
-        {!analyzing && result && result.risk_level === 'dangerous' && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-              <ShieldAlert size={32} color="var(--dangerous-primary)" />
-              <div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--dangerous-primary)', margin: 0 }}>
-                  🔴 DANGEROUS LINK
-                </h3>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Risk Score: <strong>{result.risk_score}/100</strong>
-                </div>
-              </div>
-            </div>
-
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
-              CypherBuddy detected multiple potential security risks on this site.
-            </p>
-
-            {/* Reasons List */}
-            {result.reasons && result.reasons.length > 0 && (
-              <div style={{
-                padding: '12px',
-                borderRadius: '12px',
-                background: 'var(--dangerous-bg)',
-                border: '1px solid var(--dangerous-border)',
-                marginBottom: '16px'
-              }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--dangerous-primary)', marginBottom: '4px' }}>
-                  Threat Reasons:
-                </div>
-                {result.reasons.map((r, i) => (
-                  <div key={i} style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginTop: '2px' }}>
-                    • {r}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <button 
-                onClick={onClose}
-                className="btn-primary"
-                style={{ background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', padding: '14px' }}
-              >
-                CANCEL & BLOCK (RECOMMENDED)
-              </button>
-
-              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                {onViewReport && (
-                  <button 
-                    onClick={() => onViewReport(result.analysis_details || result)}
-                    className="btn-secondary"
-                    style={{ flex: 1, padding: '10px', fontSize: '0.78rem' }}
-                  >
-                    View Full Report
-                  </button>
-                )}
-                <button 
-                  onClick={() => {
-                    window.open(targetUrl, '_system') || (window.location.href = targetUrl);
-                    onClose();
-                  }}
-                  style={{
-                    flex: 1,
-                    padding: '10px',
-                    fontSize: '0.78rem',
-                    background: 'transparent',
-                    border: '1px solid var(--dangerous-border)',
-                    color: 'var(--dangerous-primary)',
-                    borderRadius: '12px',
-                    cursor: 'pointer',
-                    fontWeight: 600
-                  }}
-                >
-                  Open Anyway
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-      </GlassCard>
     </div>
   );
 }

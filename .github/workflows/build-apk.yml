@@ -34,7 +34,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platforms;android-35 build-tools;35.0.0'
+          packages: 'platforms;android-35 platforms;android-36 build-tools;35.0.0'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -42,12 +42,10 @@ jobs:
       - name: Sync Capacitor Android
         run: |
           npx cap sync android
-          sed -i 's/abortOnError = true/abortOnError = false/g' node_modules/@capacitor/android/capacitor/build.gradle || true
-          sed -i 's/warningsAsErrors = true/warningsAsErrors = false/g' node_modules/@capacitor/android/capacitor/build.gradle || true
-          sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' android/app/capacitor.build.gradle || true
-          sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' node_modules/@capacitor/android/capacitor/build.gradle || true
-          sed -i 's/compileSdk = .*/compileSdk = 35/g' node_modules/@capacitor/android/capacitor/build.gradle || true
-          sed -i 's/targetSdkVersion = .*/targetSdkVersion = 35/g' node_modules/@capacitor/android/capacitor/build.gradle || true
+          find node_modules/@capacitor/ -name "build.gradle" -exec sed -i 's/abortOnError = true/abortOnError = false/g' {} + || true
+          find node_modules/@capacitor/ -name "build.gradle" -exec sed -i 's/warningsAsErrors = true/warningsAsErrors = false/g' {} + || true
+          find node_modules/@capacitor/ -name "build.gradle" -exec sed -i 's/compileSdk = 36/compileSdk = 35/g' {} + || true
+          find node_modules/@capacitor/ -name "build.gradle" -exec sed -i 's/targetSdkVersion = 36/targetSdkVersion = 35/g' {} + || true
           sed -i '/cordova.variables.gradle/d' android/app/capacitor.build.gradle || true
 
       - name: Build Android APK
@@ -59,7 +57,7 @@ jobs:
           java -version
           sed -i 's/\r$//' gradlew
           chmod +x gradlew
-          ./gradlew app:assembleDebug -x lint -x test --no-daemon --stacktrace
+          ./gradlew assembleDebug -x lint -x test --no-daemon --stacktrace
 
       - name: Upload Android Debug APK
         if: always()

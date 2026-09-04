@@ -14,7 +14,8 @@ import {
   ArrowRight,
   CheckCircle2
 } from 'lucide-react';
-import { analyzeUrl, analyzeFile, analyzeMessage, analyzeImageOrQr, MOCK_EXAMPLES } from '../services/securityService';
+import { analyzeUrl, analyzeFile, analyzeMessage, analyzeImageOrQr } from '../services/securityService';
+import { safeApiCall } from '../config/apiConfig';
 
 export default function ScannerScreen({ 
   initialType = 'url', 
@@ -28,37 +29,96 @@ export default function ScannerScreen({
   
   const [isScanning, setIsScanning] = useState(false);
   const [scanStepIndex, setScanStepIndex] = useState(0);
+  const [scanError, setScanError] = useState('');
 
   const scanSteps = [
     'Checking format & protocol headers...',
-    'Querying reputation indicators & domain age...',
-    'Executing YARA rules & permission heuristics...',
+    'Querying reputation indicators & threat intelligence...',
+    'Executing YARA signatures & permission heuristics...',
     'Generating comprehensive risk score & report...'
   ];
 
   const handleStartScan = async (overrideData = null) => {
+    setScanError('');
+
+    // Input Validation
+    if (activeTab === 'url' && !overrideData && !inputUrl.trim()) {
+      setScanError('Please enter a valid website URL to scan.');
+      return;
+    }
+    if (activeTab === 'apk' && !overrideData && !selectedFile) {
+      setScanError('Please select an APK or document file from your device.');
+      return;
+    }
+    if (activeTab === 'message' && !overrideData && !inputMessage.trim()) {
+      setScanError('Please enter or paste the message text to analyze.');
+      return;
+    }
+    if (activeTab === 'qr' && !overrideData && !qrText.trim()) {
+      setScanError('Please scan a live QR code or upload a QR image file.');
+      return;
+    }
+
     setIsScanning(true);
     setScanStepIndex(0);
 
     for (let i = 0; i < scanSteps.length; i++) {
       setScanStepIndex(i);
-      await new Promise(r => setTimeout(r, 450));
+      await new Promise(r => setTimeout(r, 350));
     }
 
     let result = null;
 
-    if (activeTab === 'url') {
-      const target = overrideData || inputUrl || MOCK_EXAMPLES.dangerousLink;
-      result = analyzeUrl(target);
-    } else if (activeTab === 'apk') {
-      const fileToTest = overrideData || selectedFile || { name: 'Free_Netflix_Premium_v4.2.apk', size: 14800000 };
-      result = await analyzeFile(fileToTest);
-    } else if (activeTab === 'message') {
-      const msg = overrideData || inputMessage || MOCK_EXAMPLES.phishingMsg;
-      result = analyzeMessage(msg);
-    } else if (activeTab === 'qr') {
-      const qrData = overrideData || qrText || MOCK_EXAMPLES.suspiciousLink;
-      result = analyzeImageOrQr(qrData, 'Scanned QR Code');
+    try {
+      if (activeTab === 'url') {
+        const target = overrideData || inputUrl.trim();
+        const apiRes = await safeApiCall('/api/scan/url', {
+          method: 'POST',
+          body: JSON.stringify({ url: target })
+        });
+        if (apiRes.ok && apiRes.data) {
+          result = apiRes.data;
+        } else {
+          result = analyzeUrl(target);
+        }
+      } else if (activeTab === 'message') {
+        const msg = overrideData || inputMessage.trim();
+        const apiRes = await safeApiCall('/api/scan/message', {
+          method: 'POST',
+          body: JSON.stringify({ message: msg })
+        });
+        if (apiRes.ok && apiRes.data) {
+          result = apiRes.data;
+        } else {
+          result = analyzeMessage(msg);
+        }
+      } else if (activeTab === 'apk') {
+        const fileToScan = overrideData || selectedFile;
+        const formData = new FormData();
+        formData.append('file', fileToScan);
+        
+        const token = localStorage.getItem('cypherbuddy_token');
+        const fetchRes = await fetch(`${import.meta.env?.VITE_API_BASE_URL || 'https://cypherbuddy-backend.onrender.com'}/api/scan/file`, {
+          method: 'POST',
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          body: formData
+        });
+
+        if (fetchRes.ok) {
+          result = await fetchRes.json();
+        } else {
+          result = await analyzeFile(fileToScan);
+        }
+      } else if (activeTab === 'qr') {
+        const qrData = overrideData || qrText.trim();
+        result = analyzeImageOrQr(qrData, 'Scanned QR Code');
+      }
+    } catch (e) {
+      console.warn('Real-time scan network fallback:', e);
+      if (activeTab === 'url') result = analyzeUrl(inputUrl.trim());
+      else if (activeTab === 'message') result = analyzeMessage(inputMessage.trim());
+      else if (activeTab === 'apk') result = await analyzeFile(selectedFile);
+      else result = analyzeImageOrQr(qrText.trim());
     }
 
     setIsScanning(false);
@@ -126,6 +186,24 @@ export default function ScannerScreen({
       {/* Dynamic Input Cards */}
       {!isScanning ? (
         <GlassCard>
+          {scanError && (
+            <div style={{
+              padding: '12px 14px',
+              borderRadius: '10px',
+              background: 'var(--dangerous-bg)',
+              border: '1px solid var(--dangerous-border)',
+              color: 'var(--dangerous-primary)',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '12px'
+            }}>
+              <AlertCircle size={16} />
+              <span>{scanError}</span>
+            </div>
+          )}
           {/* TAB 1: LINK SCANNER */}
           {activeTab === 'url' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>

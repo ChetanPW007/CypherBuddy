@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any
 
 from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 import bcrypt
 import jwt
@@ -811,13 +811,18 @@ async def get_admin_users(user: Dict[str, Any] = Depends(require_role(["ADMIN"])
 @app.get("/api/app/version")
 async def get_app_version():
     return {
-        "latest_version": "1.1.0",
-        "latest_build": 2,
-        "release_notes": "Seamless background link protection & in-app auto-updating.",
+        "latest_version": "1.0.0",
+        "latest_build": 1,
+        "release_notes": "CypherBuddy Security Gateway Production Release.",
         "mandatory": False,
-        "apk_download_url": "https://github.com/ChetanPW007/CypherBuddy/releases/latest/download/app-debug.apk",
-        "github_release_url": "https://github.com/ChetanPW007/CypherBuddy/releases/latest"
+        "apk_download_url": "https://cypherbuddy-backend.onrender.com/api/app/download-apk",
+        "github_release_url": "https://github.com/ChetanPW007/CypherBuddy"
     }
+
+@app.get("/api/app/download-apk")
+async def download_latest_apk():
+    # Direct APK download link for seamless in-app APK updating
+    return RedirectResponse(url="https://github.com/ChetanPW007/CypherBuddy/raw/main/android/app/build/outputs/apk/debug/app-debug.apk")
 
 if __name__ == "__main__":
     import uvicorn

@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { safeApiCall } from '../config/apiConfig';
 
+import { Browser } from '@capacitor/browser';
+
 export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport }) {
   const [analyzing, setAnalyzing] = useState(true);
   const [result, setResult] = useState(null);
@@ -39,12 +41,12 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
           const data = response.data;
           setResult(data);
 
-          // SAFE / LOW RISK: AUTO OPEN IN CHROME IMMEDIATELY IN BACKGROUND
+          // SAFE / LOW RISK: OPEN IN EXTERNAL CHROME VIA CAPACITOR BROWSER PLUGIN
           if (data.recommended_action === 'allow' || data.risk_level === 'low') {
             try {
-              window.open(targetUrl, '_system') || (window.location.href = targetUrl);
+              await Browser.open({ url: targetUrl });
             } catch (e) {
-              window.location.href = targetUrl;
+              window.open(targetUrl, '_system') || (window.location.href = targetUrl);
             }
             onClose();
           }

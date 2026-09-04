@@ -83,8 +83,28 @@ export default function App() {
   const [updateAvailableInfo, setUpdateAvailableInfo] = useState(null);
   const CURRENT_APP_VERSION = "1.0.0";
   
+  const lastProcessedUrl = React.useRef('');
+  const lastProcessedTime = React.useRef(0);
+
   const [history, setHistory] = useState(INITIAL_HISTORY);
   const [familyAlerts, setFamilyAlerts] = useState(INITIAL_FAMILY_ALERTS);
+
+  // Version comparison helper: returns true ONLY if latest > current
+  const isNewerVersion = (latest, current) => {
+    try {
+      const lParts = latest.split('.').map(Number);
+      const cParts = current.split('.').map(Number);
+      for (let i = 0; i < Math.max(lParts.length, cParts.length); i++) {
+        const l = lParts[i] || 0;
+        const c = cParts[i] || 0;
+        if (l > c) return true;
+        if (l < c) return false;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  };
 
   // Check for In-App update availability
   useEffect(() => {
@@ -92,7 +112,7 @@ export default function App() {
       try {
         const res = await safeApiCall('/api/app/version');
         if (res && res.data && res.data.latest_version) {
-          if (res.data.latest_version !== CURRENT_APP_VERSION) {
+          if (isNewerVersion(res.data.latest_version, CURRENT_APP_VERSION)) {
             setUpdateAvailableInfo(res.data);
           }
         }
@@ -132,6 +152,14 @@ export default function App() {
             if (extractedUrl.includes('http://') || extractedUrl.includes('https://')) {
               const match = extractedUrl.match(/(https?:\/\/[^\s]+)/);
               if (match) extractedUrl = match[0];
+
+              const now = Date.now();
+              if (extractedUrl === lastProcessedUrl.current && (now - lastProcessedTime.current < 12000)) {
+                return; // Prevent duplicate loop triggers
+              }
+
+              lastProcessedUrl.current = extractedUrl;
+              lastProcessedTime.current = now;
               setTargetSharedUrl(extractedUrl);
             }
           }

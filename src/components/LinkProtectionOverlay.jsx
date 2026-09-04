@@ -39,18 +39,14 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
           const data = response.data;
           setResult(data);
 
-          // LOW RISK / SAFE: AUTO-OPEN IN CHROME WITHOUT ENTERING APP
+          // SAFE / LOW RISK: AUTO OPEN IN CHROME IMMEDIATELY IN BACKGROUND
           if (data.recommended_action === 'allow' || data.risk_level === 'low') {
-            setTimeout(() => {
-              if (isMounted) {
-                try {
-                  window.open(targetUrl, '_system') || (window.location.href = targetUrl);
-                } catch (e) {
-                  window.location.href = targetUrl;
-                }
-                onClose();
-              }
-            }, 1000);
+            try {
+              window.open(targetUrl, '_system') || (window.location.href = targetUrl);
+            } catch (e) {
+              window.location.href = targetUrl;
+            }
+            onClose();
           }
         } else {
           setError(true);
@@ -71,15 +67,20 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
 
   if (!targetUrl) return null;
 
+  // IF SAFE LINK AND DISPATCHED TO CHROME, RENDER NOTHING
+  if (!analyzing && result && (result.risk_level === 'low' || result.recommended_action === 'allow')) {
+    return null;
+  }
+
   return (
     <div style={{
       position: 'fixed',
       inset: 0,
       zIndex: 99999,
-      background: 'rgba(3, 10, 26, 0.45)',
-      backdropFilter: 'blur(10px)',
-      WebkitBackdropFilter: 'blur(10px)',
-      boxShadow: 'inset 0 0 120px rgba(56, 189, 248, 0.25)',
+      background: analyzing ? 'transparent' : 'rgba(3, 10, 26, 0.65)',
+      backdropFilter: analyzing ? 'none' : 'blur(8px)',
+      WebkitBackdropFilter: analyzing ? 'none' : 'blur(8px)',
+      pointerEvents: analyzing ? 'none' : 'auto',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -88,71 +89,42 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
       animation: 'fadeIn 0.2s ease'
     }}>
       
-      {/* SCANNING / ANALYSIS FLOATING TOP BANNER */}
+      {/* INVISIBLE BACKGROUND SCANNING TOP FLOATING PILL */}
       {analyzing && (
         <div style={{
-          width: '100%',
-          maxWidth: '420px',
-          background: 'rgba(15, 23, 42, 0.95)',
-          border: '1px solid rgba(56, 189, 248, 0.5)',
-          boxShadow: '0 12px 40px rgba(56, 189, 248, 0.3)',
-          borderRadius: '20px',
-          padding: '16px 20px',
+          pointerEvents: 'auto',
+          width: '90%',
+          maxWidth: '380px',
+          background: 'rgba(15, 23, 42, 0.96)',
+          border: '1px solid rgba(56, 189, 248, 0.6)',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(56, 189, 248, 0.3)',
+          borderRadius: '30px',
+          padding: '10px 16px',
           display: 'flex',
           alignItems: 'center',
-          gap: '14px',
+          gap: '12px',
           animation: 'slideInRight 0.3s ease'
         }}>
-          <RefreshCw size={26} color="#38bdf8" className="spin" />
+          <RefreshCw size={20} color="#38bdf8" className="spin" />
           <div style={{ flex: 1, overflow: 'hidden' }}>
-            <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#38bdf8' }}>
-              🛡️ CypherBuddy Shield Scanning...
+            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8' }}>
+              🛡️ CypherBuddy Background Security Check...
             </div>
-            <div style={{ fontSize: '0.78rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'monospace' }}>
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'monospace' }}>
               {targetUrl}
             </div>
           </div>
         </div>
       )}
 
-      {/* SAFE / LOW RISK FLOATING SUCCESS BANNER */}
-      {!analyzing && result && (result.risk_level === 'low' || result.recommended_action === 'allow') && (
-        <div style={{
-          width: '100%',
-          maxWidth: '420px',
-          background: 'rgba(6, 78, 59, 0.95)',
-          border: '1px solid rgba(52, 211, 153, 0.6)',
-          boxShadow: '0 12px 40px rgba(16, 185, 129, 0.35)',
-          borderRadius: '20px',
-          padding: '16px 20px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          animation: 'slideInRight 0.3s ease'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <ShieldCheck size={28} color="#34d399" />
-            <div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#34d399' }}>
-                ✓ Verified Safe Link
-              </div>
-              <div style={{ fontSize: '0.78rem', color: '#e2e8f0', fontWeight: 600 }}>
-                Opening automatically in Chrome...
-              </div>
-            </div>
-          </div>
-          <ExternalLink size={18} color="#34d399" />
-        </div>
-      )}
-
-      {/* RISKY / DANGEROUS / SUSPICIOUS TOP BANNER & EXPANDED CARD */}
+      {/* RISKY / DANGEROUS / SUSPICIOUS WARNING BANNER OVER CHAT */}
       {!analyzing && result && (result.risk_level === 'dangerous' || result.risk_level === 'suspicious') && (
         <GlassCard style={{
           width: '100%',
           maxWidth: '440px',
           padding: '24px 20px',
-          border: result.risk_level === 'dangerous' ? '1px solid rgba(244, 63, 94, 0.6)' : '1px solid rgba(245, 158, 11, 0.6)',
-          boxShadow: result.risk_level === 'dangerous' ? '0 16px 50px rgba(244, 63, 94, 0.35)' : '0 16px 50px rgba(245, 158, 11, 0.35)',
+          border: result.risk_level === 'dangerous' ? '1px solid rgba(244, 63, 94, 0.7)' : '1px solid rgba(245, 158, 11, 0.7)',
+          boxShadow: result.risk_level === 'dangerous' ? '0 16px 50px rgba(244, 63, 94, 0.4)' : '0 16px 50px rgba(245, 158, 11, 0.4)',
           animation: 'slideInRight 0.3s ease',
           marginTop: '10px'
         }}>
@@ -170,7 +142,7 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
                 color: result.risk_level === 'dangerous' ? '#f43f5e' : '#f59e0b',
                 margin: 0
               }}>
-                {result.risk_level === 'dangerous' ? '🔴 DANGEROUS LINK BLOCKED' : '🟠 SUSPICIOUS LINK DETECTED'}
+                {result.risk_level === 'dangerous' ? '🔴 DANGEROUS LINK INTERCEPTED' : '🟠 SUSPICIOUS LINK INTERCEPTED'}
               </h3>
               <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
                 Threat Risk Score: <strong>{result.risk_score}/100</strong>
@@ -181,7 +153,7 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
           <div style={{
             fontSize: '0.8rem',
             color: '#f8fafc',
-            background: 'rgba(0,0,0,0.3)',
+            background: 'rgba(0,0,0,0.35)',
             padding: '10px 12px',
             borderRadius: '10px',
             wordBreak: 'break-all',

@@ -808,6 +808,17 @@ async def get_admin_users(user: Dict[str, Any] = Depends(require_role(["ADMIN"])
         })
     return {"users": clean_users}
 
+@app.get("/api/app/version")
+async def get_app_version():
+    return {
+        "latest_version": "1.1.0",
+        "latest_build": 2,
+        "release_notes": "Seamless background link protection & in-app auto-updating.",
+        "mandatory": False,
+        "apk_download_url": "https://github.com/ChetanPW007/CypherBuddy/releases/latest/download/app-debug.apk",
+        "github_release_url": "https://github.com/ChetanPW007/CypherBuddy/releases/latest"
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)

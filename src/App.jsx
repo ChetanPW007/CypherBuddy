@@ -17,6 +17,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminAuthScreen from './pages/AdminAuthScreen';
 import FirstTimeSetupScreen from './pages/FirstTimeSetupScreen';
 import LinkProtectionOverlay from './components/LinkProtectionOverlay';
+import AutoUpdateModal from './components/AutoUpdateModal';
 
 import { API_BASE_URL, safeApiCall } from './config/apiConfig';
 import { bindDeviceToAccount } from './utils/deviceInfo';
@@ -79,9 +80,28 @@ export default function App() {
 
   // Intercepted / Shared Link State
   const [targetSharedUrl, setTargetSharedUrl] = useState(null);
+  const [updateAvailableInfo, setUpdateAvailableInfo] = useState(null);
+  const CURRENT_APP_VERSION = "1.0.0";
   
   const [history, setHistory] = useState(INITIAL_HISTORY);
   const [familyAlerts, setFamilyAlerts] = useState(INITIAL_FAMILY_ALERTS);
+
+  // Check for In-App update availability
+  useEffect(() => {
+    const checkAppUpdate = async () => {
+      try {
+        const res = await safeApiCall('/api/app/version');
+        if (res && res.data && res.data.latest_version) {
+          if (res.data.latest_version !== CURRENT_APP_VERSION) {
+            setUpdateAvailableInfo(res.data);
+          }
+        }
+      } catch (e) {
+        console.warn('In-App Update Check failed:', e);
+      }
+    };
+    checkAppUpdate();
+  }, []);
 
   // Gateway Notification & User Control Settings
   const [gatewayNotification, setGatewayNotification] = useState(null);
@@ -215,6 +235,14 @@ export default function App() {
             setTargetSharedUrl(null);
             setActiveTab('result');
           }}
+        />
+      )}
+
+      {/* In-App Automatic Update Prompt */}
+      {updateAvailableInfo && (
+        <AutoUpdateModal 
+          updateInfo={updateAvailableInfo}
+          onClose={() => setUpdateAvailableInfo(null)}
         />
       )}
 

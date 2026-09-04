@@ -731,6 +731,17 @@ async def scan_file(file: UploadFile = File(...), user: Dict[str, Any] = Depends
     await log_audit_event("FILE_SCAN", user["id"], f"File {file.filename} Hash: {sha256_hash}")
     return result
 
+@app.get("/api/reports")
+async def get_user_reports(user: Dict[str, Any] = Depends(get_current_user)):
+    db = await get_database()
+    if db is not None:
+        cursor = db.security_scans.find({"userId": user["id"]}, {"_id": 0}).sort("timestamp", -1).limit(50)
+        scans = await cursor.to_list(length=50)
+        return {"reports": scans}
+    
+    user_scans = [s for s in REPORTS_DB if s.get("userId") == user["id"]]
+    return {"reports": user_scans}
+
 # ----------------------------------------------------
 # ADMIN DASHBOARD & TELEMETRY ENDPOINTS
 # ----------------------------------------------------

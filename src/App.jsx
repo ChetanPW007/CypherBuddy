@@ -128,6 +128,7 @@ export default function App() {
     if (storedToken) {
       setUser({ role: 'USER' });
       bindDeviceToAccount();
+      fetchUserReports();
       if (!isSetupDone) {
         setActiveTab('setup');
       } else {
@@ -135,6 +136,17 @@ export default function App() {
       }
     }
   }, []);
+
+  const fetchUserReports = async () => {
+    try {
+      const res = await safeApiCall('/api/reports');
+      if (res && res.reports && Array.isArray(res.reports)) {
+        setHistory(res.reports);
+      }
+    } catch (e) {
+      console.warn('Failed to load user reports:', e);
+    }
+  };
 
   // Handle Onboarding finish
   const handleOnboardingComplete = () => {
@@ -146,6 +158,7 @@ export default function App() {
   const handleAuthSuccess = (authData) => {
     setUser(authData.user);
     bindDeviceToAccount();
+    fetchUserReports();
     const isSetupDone = localStorage.getItem('cypherbuddy_setup_completed') === 'true';
     if (!isSetupDone) {
       setActiveTab('setup');

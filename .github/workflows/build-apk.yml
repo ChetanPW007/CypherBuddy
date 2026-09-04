@@ -26,7 +26,7 @@ jobs:
         run: npm run build
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '21'
@@ -42,6 +42,7 @@ jobs:
       - name: Sync Capacitor Android
         run: |
           npx cap sync android
+          find node_modules/@capacitor/ -name "build.gradle" -exec sed -i 's/8.13.0/8.7.3/g' {} + || true
           find node_modules/@capacitor/ -name "build.gradle" -exec sed -i 's/abortOnError = true/abortOnError = false/g' {} + || true
           find node_modules/@capacitor/ -name "build.gradle" -exec sed -i 's/warningsAsErrors = true/warningsAsErrors = false/g' {} + || true
           find node_modules/@capacitor/ -name "build.gradle" -exec sed -i 's/compileSdk = 36/compileSdk = 35/g' {} + || true
@@ -51,8 +52,6 @@ jobs:
       - name: Build Android APK
         run: |
           cd android
-          echo "Using JAVA_HOME: $JAVA_HOME"
-          java -version
           sed -i 's/\r$//' gradlew
           chmod +x gradlew
           ./gradlew assembleDebug -x lint -x test --no-daemon --stacktrace

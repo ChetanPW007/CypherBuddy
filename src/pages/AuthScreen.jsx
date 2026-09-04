@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import GlassCard from '../components/GlassCard';
-import { Lock, Mail, User, Phone, ShieldCheck, KeyRound, AlertTriangle, ArrowRight, RefreshCw, CheckCircle2, ShieldAlert, Globe } from 'lucide-react';
+import { Lock, Mail, User, Phone, ShieldCheck, KeyRound, AlertTriangle, ArrowRight, RefreshCw, CheckCircle2, ShieldAlert, Globe, Eye, EyeOff } from 'lucide-react';
+import { API_BASE_URL, safeApiCall } from '../config/apiConfig';
 
 const COUNTRY_CODES = [
   { code: '+91', country: '🇮🇳 India (+91)' },
@@ -13,7 +14,7 @@ const COUNTRY_CODES = [
   { code: '+65', country: '🇸🇬 Singapore (+65)' }
 ];
 
-export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl = 'http://127.0.0.1:8000' }) {
+export default function AuthScreen({ onAuthSuccess, onBackToLanding }) {
   const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState('');
   const [emailInput, setEmailInput] = useState('');
@@ -22,6 +23,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   
   // Single login contact state (for sign in)
   const [loginContact, setLoginContact] = useState('');
@@ -65,6 +67,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
   // STEP 1: Submit Credentials
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setError('');
     setSuccessMsg('');
 
@@ -82,26 +85,23 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
     setLoading(true);
 
     try {
-      const baseUrl = import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL || apiBaseUrl;
-      const endpoint = isRegister ? `${baseUrl}/api/auth/register` : `${baseUrl}/api/auth/login`;
-
+      const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
       const fullPhone = phoneNumber ? `${countryCode}${phoneNumber.replace(/[^0-9]/g, '')}` : '';
 
       const bodyPayload = isRegister 
-        ? { name, email: emailInput, phone: fullPhone, password, termsAccepted }
-        : { email: loginContact, password };
+        ? { name: name.trim(), email: emailInput.trim(), phone: fullPhone, password, termsAccepted }
+        : { email: loginContact.trim(), password };
 
-      const res = await fetch(endpoint, {
+      const res = await safeApiCall(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyPayload)
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.detail || 'Authentication failed. Please check your credentials.');
+        throw new Error(res.error || (isRegister ? 'Unable to create your account. Please check your details and try again.' : 'Invalid email/phone or password. Please try again.'));
       }
+
+      const data = res.data;
 
       // Check if backend detected an ADMIN account requiring 2-Step OTP
       if (data.status === 'otp_required') {
@@ -115,6 +115,11 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
         return;
       }
 
+      // Store Auth Tokens securely
+      if (data.accessToken) {
+        localStorage.setItem('cypherbuddy_token', data.accessToken);
+      }
+
       // Standard User Login Success
       onAuthSuccess({
         accessToken: data.accessToken,
@@ -124,7 +129,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
       });
 
     } catch (err) {
-      setError(err.message || 'Authentication failed. Please check your credentials.');
+      setError(err.message || 'Authentication failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -133,6 +138,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
   // STEP 2: Verify Admin OTP
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
+    if (loading) return;
     if (otp.length !== 6) {
       setError('Please enter a valid 6-digit OTP code.');
       return;
@@ -142,20 +148,22 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
     setError('');
 
     try {
-      const baseUrl = import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL || apiBaseUrl;
-      const res = await fetch(`${baseUrl}/api/auth/admin/verify-otp`, {
+      const res = await safeApiCall('/api/auth/admin/verify-otp', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone_or_email: loginContact.trim(),
           otp: otp.trim()
         })
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.detail || 'Invalid or expired OTP.');
+        throw new Error(res.error || 'Invalid or expired OTP code.');
+      }
+
+      const data = res.data;
+
+      if (data.accessToken) {
+        localStorage.setItem('cypherbuddy_token', data.accessToken);
       }
 
       setSuccessMsg('🎉 2-Step OTP Authentication successful! Opening Admin Dashboard...');
@@ -175,26 +183,24 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding, apiBaseUrl 
     }
   };
 
-
   // Resend OTP
   const handleResendOtp = async () => {
-    if (cooldown > 0) return;
+    if (cooldown > 0 || loading) return;
     setLoading(true);
     setError('');
 
     try {
-      const baseUrl = import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL || apiBaseUrl;
-      const res = await fetch(`${baseUrl}/api/auth/admin/resend-otp`, {
+      const res = await safeApiCall('/api/auth/admin/resend-otp', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone_or_email: loginContact.trim(),
           password: password
         })
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Failed to resend OTP.');
+      if (!res.ok) {
+        throw new Error(res.error || 'Failed to resend OTP.');
+      }
 
       setSuccessMsg('New 6-digit OTP sent to your contact!');
       setCooldown(60);

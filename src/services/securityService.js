@@ -1,5 +1,7 @@
 // CypherBuddy Security Analysis Engine
-// Real Heuristic Scanner, SHA-256 Hasher, Risk Evaluator, and Threat Rules
+// Real Heuristic Scanner, SHA-256 Hasher, Risk Evaluator, and FastAPI Backend Integration
+
+import { safeApiCall } from '../config/apiConfig';
 
 export const MOCK_EXAMPLES = {
   dangerousLink: 'http://paypa1-account-security-update.xyz/login.php',

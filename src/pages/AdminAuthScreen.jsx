@@ -13,8 +13,9 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
+import { API_BASE_URL, safeApiCall } from '../config/apiConfig';
 
-export default function AdminAuthScreen({ onAdminAuthSuccess, apiBaseUrl = 'http://127.0.0.1:8000' }) {
+export default function AdminAuthScreen({ onAdminAuthSuccess }) {
   const [step, setStep] = useState(1); // Step 1: Credentials, Step 2: OTP
   const [contact, setContact] = useState('');
   const [password, setPassword] = useState('');
@@ -39,6 +40,7 @@ export default function AdminAuthScreen({ onAdminAuthSuccess, apiBaseUrl = 'http
   // STEP 1: Submit Credentials
   const handleStep1Submit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     if (!contact.trim() || !password) {
       setError('Please enter both your phone number/email and password.');
       return;
@@ -48,21 +50,19 @@ export default function AdminAuthScreen({ onAdminAuthSuccess, apiBaseUrl = 'http
     setError('');
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/auth/admin/login`, {
+      const response = await safeApiCall('/api/auth/admin/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone_or_email: contact.trim(),
           password: password
         })
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.detail || 'Invalid phone number or password.');
+        throw new Error(response.error || 'Invalid phone number, email or password.');
       }
 
+      const data = response.data;
       setMaskedContact(data.targetMasked || contact);
       setSuccessMsg('Credentials verified! 6-digit OTP sent to your registered contact.');
       setStep(2);
@@ -77,6 +77,7 @@ export default function AdminAuthScreen({ onAdminAuthSuccess, apiBaseUrl = 'http
   // STEP 2: Verify OTP
   const handleStep2Verify = async (e) => {
     e.preventDefault();
+    if (loading) return;
     if (otp.length !== 6) {
       setError('Please enter a valid 6-digit OTP code.');
       return;
@@ -86,19 +87,21 @@ export default function AdminAuthScreen({ onAdminAuthSuccess, apiBaseUrl = 'http
     setError('');
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/auth/admin/verify-otp`, {
+      const response = await safeApiCall('/api/auth/admin/verify-otp', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone_or_email: contact.trim(),
           otp: otp.trim()
         })
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.detail || 'Invalid or expired OTP.');
+        throw new Error(response.error || 'Invalid or expired OTP.');
+      }
+
+      const data = response.data;
+      if (data.accessToken) {
+        localStorage.setItem('cypherbuddy_token', data.accessToken);
       }
 
       setSuccessMsg('🎉 2-Step OTP Authentication successful! Opening Admin Dashboard...');
@@ -116,24 +119,21 @@ export default function AdminAuthScreen({ onAdminAuthSuccess, apiBaseUrl = 'http
 
   // Resend OTP
   const handleResendOtp = async () => {
-    if (cooldown > 0) return;
+    if (cooldown > 0 || loading) return;
     setLoading(true);
     setError('');
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/auth/admin/resend-otp`, {
+      const response = await safeApiCall('/api/auth/admin/resend-otp', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone_or_email: contact.trim(),
           password: password
         })
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.detail || 'Failed to resend OTP.');
+        throw new Error(response.error || 'Failed to resend OTP.');
       }
 
       setSuccessMsg('New 6-digit OTP sent to your registered admin contact!');

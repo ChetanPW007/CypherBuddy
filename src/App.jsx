@@ -16,9 +16,7 @@ import PermissionsScreen from './pages/PermissionsScreen';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminAuthScreen from './pages/AdminAuthScreen';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-
-
+import { API_BASE_URL, safeApiCall } from './config/apiConfig';
 import './styles/glassmorphism.css';
 
 const INITIAL_HISTORY = [

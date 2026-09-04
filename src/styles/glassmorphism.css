@@ -163,6 +163,8 @@ body {
   display: flex;
   flex-direction: column;
   background: transparent;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   transition: max-width 0.3s ease;
 }
 

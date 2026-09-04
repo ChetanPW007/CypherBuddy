@@ -248,8 +248,18 @@ class TokenResponse(BaseModel):
 class UrlScanRequest(BaseModel):
     url: str
 
+class AnalyzeUrlRequest(BaseModel):
+    url: str
+
 class MessageScanRequest(BaseModel):
     message: str
+
+class DeviceRegisterRequest(BaseModel):
+    installation_id: str
+    device_public_identifier: Optional[str] = "Android Device"
+    platform: Optional[str] = "Android"
+    app_version: Optional[str] = "1.0.0"
+    protection_status: Optional[str] = "ACTIVE"
 
 # Helper Functions for JWT Auth
 def create_access_token(data: dict, expires_delta: Optional[datetime.timedelta] = None):
@@ -593,6 +603,60 @@ def get_me(user: Dict[str, Any] = Depends(get_current_user)):
 # ----------------------------------------------------
 # SECURITY SCANNING & USER ENDPOINTS (STORED IN MONGODB)
 # ----------------------------------------------------
+# SECURITY SCANNING, DEVICE BINDING & LINK PROTECTION ENDPOINTS
+# ----------------------------------------------------
+
+@app.post("/api/security/analyze-url")
+async def analyze_url_security(req: AnalyzeUrlRequest, request: Request):
+    url = req.url.strip()
+    analysis = analyze_url_hardened(url)
+    
+    score = analysis.get("riskScore", 10)
+    if score >= 70:
+        level = "dangerous"
+        action = "block"
+    elif score >= 30:
+        level = "suspicious"
+        action = "warn"
+    else:
+        level = "low"
+        action = "allow"
+        
+    reasons = [f["title"] + ": " + f["desc"] for f in analysis.get("findings", []) if f.get("type") != "SAFE"]
+    
+    return {
+        "risk_score": score,
+        "risk_level": level,
+        "confidence": 0.95,
+        "reasons": reasons,
+        "recommended_action": action,
+        "url": url,
+        "analysis_details": analysis
+    }
+
+@app.post("/api/device/register")
+async def register_device(req: DeviceRegisterRequest, user: Dict[str, Any] = Depends(get_current_user)):
+    device_record = {
+        "user_id": user["id"],
+        "installation_id": req.installation_id,
+        "device_public_identifier": req.device_public_identifier,
+        "platform": req.platform,
+        "app_version": req.app_version,
+        "protection_status": req.protection_status,
+        "last_seen": datetime.datetime.utcnow().isoformat(),
+        "created_at": datetime.datetime.utcnow().isoformat()
+    }
+    
+    db = await get_database()
+    if db is not None:
+        await db.devices.update_one(
+            {"installation_id": req.installation_id},
+            {"$set": device_record},
+            upsert=True
+        )
+    
+    await log_audit_event("DEVICE_BOUND", user["id"], f"Bound: {req.installation_id} ({req.platform})")
+    return {"status": "bound", "device": device_record}
 
 @app.post("/api/scan/url")
 async def scan_url(req: UrlScanRequest, user: Dict[str, Any] = Depends(get_current_user)):

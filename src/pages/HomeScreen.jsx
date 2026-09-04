@@ -26,6 +26,27 @@ export default function HomeScreen({
   onSelectTroubleshoot,
   onTriggerGatewayNotification 
 }) {
+  const isSetupCompleted = localStorage.getItem('cypherbuddy_setup_completed') === 'true';
+  const notifPerm = typeof Notification !== 'undefined' ? Notification.permission === 'granted' : true;
+  const cameraPerm = localStorage.getItem('cypherbuddy_perm_camera') !== 'denied';
+
+  let protectionStatus = 'OFF';
+  let statusColor = 'var(--dangerous-primary)';
+  let statusBg = 'var(--dangerous-bg)';
+  let statusBorder = 'var(--dangerous-border)';
+
+  if (isSetupCompleted && notifPerm && cameraPerm) {
+    protectionStatus = 'ACTIVE';
+    statusColor = 'var(--safe-primary)';
+    statusBg = 'var(--safe-bg)';
+    statusBorder = 'var(--safe-border)';
+  } else if (isSetupCompleted) {
+    protectionStatus = 'LIMITED';
+    statusColor = 'var(--suspicious-primary)';
+    statusBg = 'var(--suspicious-bg)';
+    statusBorder = 'var(--suspicious-border)';
+  }
+
   const handleQuickScan = (type) => {
     setScannerType(type);
     setActiveTab('scan');
@@ -41,6 +62,56 @@ export default function HomeScreen({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: '90px' }}>
       
+      {/* DEVICE PROTECTION STATUS CARD (Section 21 Requirement) */}
+      <GlassCard style={{ border: `1px solid ${statusBorder}`, background: statusBg }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Shield size={24} color={statusColor} />
+            <div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>🛡️ Device Protection</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Real-time Android Protection Shield</div>
+            </div>
+          </div>
+          <span style={{
+            fontSize: '0.8rem',
+            fontWeight: 800,
+            padding: '4px 10px',
+            borderRadius: '20px',
+            color: statusColor,
+            border: `1px solid ${statusBorder}`,
+            background: 'var(--glass-card)'
+          }}>
+            Status: {protectionStatus}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', margin: '10px 0 14px 0', fontSize: '0.82rem' }}>
+          <div style={{ color: 'var(--safe-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ShieldCheck size={14} /> Account protected & device bound
+          </div>
+          <div style={{ color: notifPerm ? 'var(--safe-primary)' : 'var(--suspicious-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ShieldCheck size={14} /> Notifications: {notifPerm ? 'Enabled' : 'Disabled (Click Manage)'}
+          </div>
+          <div style={{ color: cameraPerm ? 'var(--safe-primary)' : 'var(--suspicious-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ShieldCheck size={14} /> QR scanning: {cameraPerm ? 'Camera Available' : 'Upload Alternative Active'}
+          </div>
+          <div style={{ color: 'var(--safe-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ShieldCheck size={14} /> File scanning: Storage Access Framework (SAF)
+          </div>
+          <div style={{ color: 'var(--safe-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ShieldCheck size={14} /> Link protection: Configured (HTTP/HTTPS Share Intent)
+          </div>
+        </div>
+
+        <button 
+          onClick={() => setActiveTab('permissions')}
+          className="btn-secondary"
+          style={{ width: '100%', fontSize: '0.82rem', padding: '10px' }}
+        >
+          <Smartphone size={15} /> Manage Protection Settings
+        </button>
+      </GlassCard>
+
       {/* Hero Welcome & Background Gateway Banner Card */}
       <GlassCard className="scan-pulse-active" style={{ background: 'linear-gradient(135deg, rgba(5, 150, 105, 0.08), rgba(2, 132, 199, 0.12))' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>

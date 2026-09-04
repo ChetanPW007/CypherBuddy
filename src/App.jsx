@@ -15,8 +15,11 @@ import FamilyScreen from './pages/FamilyScreen';
 import PermissionsScreen from './pages/PermissionsScreen';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminAuthScreen from './pages/AdminAuthScreen';
+import FirstTimeSetupScreen from './pages/FirstTimeSetupScreen';
+import LinkProtectionOverlay from './components/LinkProtectionOverlay';
 
 import { API_BASE_URL, safeApiCall } from './config/apiConfig';
+import { bindDeviceToAccount } from './utils/deviceInfo';
 import './styles/glassmorphism.css';
 
 const INITIAL_HISTORY = [
@@ -73,6 +76,9 @@ export default function App() {
   const [scannerType, setScannerType] = useState('url');
   const [currentScanResult, setCurrentScanResult] = useState(null);
   const [assistantQuery, setAssistantQuery] = useState('');
+
+  // Intercepted / Shared Link State
+  const [targetSharedUrl, setTargetSharedUrl] = useState(null);
   
   const [history, setHistory] = useState(INITIAL_HISTORY);
   const [familyAlerts, setFamilyAlerts] = useState(INITIAL_FAMILY_ALERTS);
@@ -86,10 +92,31 @@ export default function App() {
     securityAnimations: true
   });
 
-  // Apply default theme attribute
+  // Apply default theme & restore persistent session / incoming share intents
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
+
+    // Check for shared URL query parameters (e.g. ?url=https://...)
+    const params = new URLSearchParams(window.location.search);
+    const shared = params.get('url') || params.get('link') || params.get('text');
+    if (shared && (shared.startsWith('http://') || shared.startsWith('https://'))) {
+      setTargetSharedUrl(shared);
+    }
+
+    // Check stored user session
+    const storedToken = localStorage.getItem('cypherbuddy_token');
+    const isSetupDone = localStorage.getItem('cypherbuddy_setup_completed') === 'true';
+
+    if (storedToken) {
+      setUser({ role: 'USER' });
+      bindDeviceToAccount();
+      if (!isSetupDone) {
+        setActiveTab('setup');
+      } else {
+        setActiveTab('home');
+      }
+    }
+  }, []);
 
   // Handle Onboarding finish
   const handleOnboardingComplete = () => {
@@ -100,11 +127,18 @@ export default function App() {
   // Handle Auth Login/Register success
   const handleAuthSuccess = (authData) => {
     setUser(authData.user);
-    setActiveTab('home');
+    bindDeviceToAccount();
+    const isSetupDone = localStorage.getItem('cypherbuddy_setup_completed') === 'true';
+    if (!isSetupDone) {
+      setActiveTab('setup');
+    } else {
+      setActiveTab('home');
+    }
   };
 
   const handleLogout = () => {
     setUser(null);
+    localStorage.removeItem('cypherbuddy_token');
     setActiveTab('landing');
   };
 
@@ -140,6 +174,19 @@ export default function App() {
   return (
     <div className="app-viewport-wrapper">
       
+      {/* Link Protection Intercept Overlay (Section 9, 11, 12, 13, 14, 25) */}
+      {targetSharedUrl && (
+        <LinkProtectionOverlay 
+          targetUrl={targetSharedUrl}
+          onClose={() => setTargetSharedUrl(null)}
+          onViewReport={(item) => {
+            setCurrentScanResult(item);
+            setTargetSharedUrl(null);
+            setActiveTab('result');
+          }}
+        />
+      )}
+
       {/* Global Background Security Gateway Notification Banner */}
       <SecurityGatewayBanner 
         notification={gatewayNotification}
@@ -192,6 +239,13 @@ export default function App() {
             <AuthScreen
               onAuthSuccess={handleAuthSuccess}
               onBackToLanding={() => setActiveTab('landing')}
+            />
+          )}
+
+          {/* VIEW: FIRST-TIME DEVICE & PERMISSION SETUP WIZARD (Section 1 & 3) */}
+          {activeTab === 'setup' && (
+            <FirstTimeSetupScreen 
+              onCompleteSetup={() => setActiveTab('home')}
             />
           )}
 
@@ -285,7 +339,7 @@ export default function App() {
         </main>
 
         {/* Bottom Navigation Bar */}
-        {activeTab !== 'landing' && activeTab !== 'onboarding' && activeTab !== 'auth' && (
+        {activeTab !== 'landing' && activeTab !== 'onboarding' && activeTab !== 'auth' && activeTab !== 'setup' && (
           <Navigation 
             activeTab={activeTab}
             setActiveTab={setActiveTab}

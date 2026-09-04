@@ -62,6 +62,20 @@ export default function FirstTimeSetupScreen({ onCompleteSetup }) {
     }
   };
 
+  const handleOpenAndroidSettings = () => {
+    setLinkProtectionEnabled(true);
+    localStorage.setItem('cypherbuddy_perm_link', 'configured');
+    try {
+      window.location.href = 'intent:#Intent;action=android.settings.APP_OPEN_BY_DEFAULT_SETTINGS;package=com.cypherbuddy.app;end';
+    } catch (e) {
+      try {
+        window.location.href = 'intent:#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;package=com.cypherbuddy.app;end';
+      } catch (err) {
+        console.warn('System settings intent launch:', err);
+      }
+    }
+  };
+
   // Finish First-Time Setup Flow
   const handleFinishSetup = async () => {
     setLoading(true);
@@ -70,6 +84,8 @@ export default function FirstTimeSetupScreen({ onCompleteSetup }) {
     setLoading(false);
     onCompleteSetup();
   };
+
+  const isAllConfigured = cameraState !== 'prompt' && notificationState !== 'prompt' && linkProtectionEnabled;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', padding: '16px 12px' }}>
@@ -93,11 +109,11 @@ export default function FirstTimeSetupScreen({ onCompleteSetup }) {
             </div>
 
             <h2 style={{ fontSize: '1.5rem', fontWeight: 800, margin: '0 0 8px 0' }} className="gradient-text-brand">
-              🛡️ Protect Your Device
+              🛡️ Mandatory Device Protection Setup
             </h2>
             
             <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.5', marginBottom: '24px' }}>
-              CypherBuddy helps analyse suspicious links, files, QR codes, and security events. Let's configure your security protection settings.
+              To ensure real-time link protection and threat alerts work on your Android phone, please configure system permissions below.
             </p>
 
             <button 
@@ -105,74 +121,69 @@ export default function FirstTimeSetupScreen({ onCompleteSetup }) {
               className="btn-primary"
               style={{ fontSize: '1rem', padding: '14px 24px' }}
             >
-              <span>Continue Setup</span>
+              <span>Start Permission Setup</span>
               <ArrowRight size={18} />
             </button>
           </div>
         ) : (
           /* SETUP CARDS SCREEN */
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '4px' }}>
               <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '0 0 4px 0' }}>
-                Device Protection Setup
+                Device System Permissions
               </h3>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
-                Configure individual protection features below.
+                Configure required Android system settings below to unlock Dashboard.
               </p>
             </div>
 
-            {/* CARD 1: Link Protection */}
+            {/* CARD 1: Link Protection & System Settings */}
             <div style={{
               padding: '14px',
               borderRadius: '14px',
               background: 'var(--input-bg)',
-              border: '1px solid var(--glass-border)'
+              border: linkProtectionEnabled ? '1px solid var(--safe-border)' : '1px solid var(--glass-border)'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Link size={20} color="var(--brand-cyan)" />
-                  <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>1. 🔗 Link Protection</span>
+                  <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>1. 🔗 Link Interception & Default App</span>
                 </div>
                 <CheckCircle2 size={18} color="var(--safe-primary)" />
               </div>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>
-                Allows CypherBuddy to check links shared from WhatsApp, Chrome or SMS before opening.
+                If Chrome or another browser is already set to always open links, tap below to open Android Settings and choose CypherBuddy.
               </p>
               <button 
-                onClick={() => setLinkProtectionEnabled(!linkProtectionEnabled)}
+                onClick={handleOpenAndroidSettings}
                 className="btn-secondary"
-                style={{ width: '100%', fontSize: '0.78rem', padding: '8px 12px' }}
+                style={{ width: '100%', fontSize: '0.78rem', padding: '10px 12px', background: 'rgba(2, 132, 199, 0.15)', color: 'var(--brand-cyan)' }}
               >
-                <Globe size={14} />
-                {linkProtectionEnabled ? '✓ Supported Link Protection Configured' : 'Enable Link Protection'}
+                <Settings size={14} />
+                Open Android System Settings / Default Apps
               </button>
             </div>
 
-            {/* CARD 2: File Analysis */}
+            {/* CARD 2: File Analysis (SAF) */}
             <div style={{
               padding: '14px',
               borderRadius: '14px',
               background: 'var(--input-bg)',
-              border: '1px solid var(--glass-border)'
+              border: '1px solid var(--safe-border)'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <FolderCheck size={20} color="var(--brand-emerald)" />
-                  <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>2. 📁 File Analysis</span>
+                  <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>2. 📁 File Inspection (SAF)</span>
                 </div>
                 <CheckCircle2 size={18} color="var(--safe-primary)" />
               </div>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>
-                Uses Android's official Storage Access Framework (SAF) picker. No unrestricted storage access requested.
+                Uses Android Storage Access Framework (SAF). Zero privacy risk or background file scanning.
               </p>
-              <button 
-                className="btn-secondary"
-                style={{ width: '100%', fontSize: '0.78rem', padding: '8px 12px' }}
-                onClick={() => setFileAccessConfigured(true)}
-              >
-                <Upload size={14} />
-                ✓ Official Document Picker Active
-              </button>
+              <div style={{ fontSize: '0.78rem', color: 'var(--safe-primary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <CheckCircle2 size={14} /> SAF Document Picker Active
+              </div>
             </div>
 
             {/* CARD 3: QR Scanner Camera Access */}
@@ -180,47 +191,34 @@ export default function FirstTimeSetupScreen({ onCompleteSetup }) {
               padding: '14px',
               borderRadius: '14px',
               background: 'var(--input-bg)',
-              border: '1px solid var(--glass-border)'
+              border: cameraState === 'granted' ? '1px solid var(--safe-border)' : '1px solid var(--suspicious-border)'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Camera size={20} color="#f59e0b" />
-                  <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>3. 📷 QR Scanner</span>
+                  <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>3. 📷 Camera Access (QR Scanning)</span>
                 </div>
                 {cameraState === 'granted' ? (
                   <CheckCircle2 size={18} color="var(--safe-primary)" />
-                ) : cameraState === 'denied' ? (
-                  <AlertCircle size={18} color="var(--dangerous-primary)" />
-                ) : null}
+                ) : (
+                  <AlertCircle size={18} color="var(--suspicious-primary)" />
+                )}
               </div>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>
-                Camera access allows CypherBuddy to scan QR codes and check destinations before opening them.
+                Required for real-time QR code scanning via device camera.
               </p>
 
-              {cameraState === 'denied' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--dangerous-primary)', fontWeight: 600 }}>
-                    ⚠️ Camera access is disabled. You can still upload QR screenshot images!
-                  </div>
-                  <button 
-                    onClick={handleRequestCamera}
-                    className="btn-secondary"
-                    style={{ fontSize: '0.78rem', padding: '8px 12px' }}
-                  >
-                    <Settings size={14} /> Try Camera Permission Again
-                  </button>
-                </div>
-              ) : cameraState === 'granted' ? (
+              {cameraState === 'granted' ? (
                 <div style={{ fontSize: '0.78rem', color: 'var(--safe-primary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <CheckCircle2 size={14} /> Camera access granted
+                  <CheckCircle2 size={14} /> Camera permission granted
                 </div>
               ) : (
                 <button 
                   onClick={handleRequestCamera}
-                  className="btn-secondary"
-                  style={{ width: '100%', fontSize: '0.78rem', padding: '8px 12px' }}
+                  className="btn-primary"
+                  style={{ width: '100%', fontSize: '0.78rem', padding: '10px 12px', background: 'var(--suspicious-primary)' }}
                 >
-                  <Camera size={14} /> Grant Camera Permission
+                  <Camera size={14} /> Allow Camera System Permission
                 </button>
               )}
             </div>
@@ -230,17 +228,17 @@ export default function FirstTimeSetupScreen({ onCompleteSetup }) {
               padding: '14px',
               borderRadius: '14px',
               background: 'var(--input-bg)',
-              border: '1px solid var(--glass-border)'
+              border: notificationState === 'granted' ? '1px solid var(--safe-border)' : '1px solid var(--suspicious-border)'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Bell size={20} color="#fb7185" />
-                  <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>4. 🔔 Security Alerts</span>
+                  <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>4. 🔔 Security Notification Alerts</span>
                 </div>
                 {notificationState === 'granted' && <CheckCircle2 size={18} color="var(--safe-primary)" />}
               </div>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0 0 10px 0' }}>
-                CypherBuddy uses notifications to alert you when a security scan detects a threat.
+                Required to alert you immediately when a dangerous link or file threat is detected.
               </p>
 
               {notificationState === 'granted' ? (
@@ -250,10 +248,10 @@ export default function FirstTimeSetupScreen({ onCompleteSetup }) {
               ) : (
                 <button 
                   onClick={handleRequestNotification}
-                  className="btn-secondary"
-                  style={{ width: '100%', fontSize: '0.78rem', padding: '8px 12px' }}
+                  className="btn-primary"
+                  style={{ width: '100%', fontSize: '0.78rem', padding: '10px 12px', background: 'var(--suspicious-primary)' }}
                 >
-                  <Bell size={14} /> Enable Security Notifications
+                  <Bell size={14} /> Allow Security Notification Permission
                 </button>
               )}
             </div>
@@ -263,9 +261,9 @@ export default function FirstTimeSetupScreen({ onCompleteSetup }) {
               onClick={handleFinishSetup}
               disabled={loading}
               className="btn-primary"
-              style={{ marginTop: '8px' }}
+              style={{ marginTop: '8px', padding: '14px 20px', fontSize: '0.95rem' }}
             >
-              {loading ? 'Binding Device & Initializing...' : 'COMPLETE SETUP & OPEN DASHBOARD'}
+              {loading ? 'Binding Device & Initializing...' : 'ALLOW & OPEN SIGNED DASHBOARD'}
               <ArrowRight size={18} />
             </button>
           </div>

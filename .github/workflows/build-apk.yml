@@ -42,11 +42,11 @@ jobs:
       - name: Sync Capacitor Android
         run: |
           npx cap sync android
-          find node_modules/@capacitor/ -name "build.gradle" -exec sed -i 's/8.13.0/8.7.3/g' {} + || true
-          find node_modules/@capacitor/ -name "build.gradle" -exec sed -i 's/abortOnError = true/abortOnError = false/g' {} + || true
-          find node_modules/@capacitor/ -name "build.gradle" -exec sed -i 's/warningsAsErrors = true/warningsAsErrors = false/g' {} + || true
-          find node_modules/@capacitor/ -name "build.gradle" -exec sed -i 's/compileSdk = 36/compileSdk = 35/g' {} + || true
-          find node_modules/@capacitor/ -name "build.gradle" -exec sed -i 's/targetSdkVersion = 36/targetSdkVersion = 35/g' {} + || true
+          find . -name "build.gradle" -exec sed -i 's/8.13.0/8.7.3/g' {} + || true
+          find . -name "build.gradle" -exec sed -i 's/abortOnError = true/abortOnError = false/g' {} + || true
+          find . -name "build.gradle" -exec sed -i 's/warningsAsErrors = true/warningsAsErrors = false/g' {} + || true
+          find . -name "build.gradle" -exec sed -i 's/compileSdk = 36/compileSdk = 35/g' {} + || true
+          find . -name "build.gradle" -exec sed -i 's/targetSdkVersion = 36/targetSdkVersion = 35/g' {} + || true
           sed -i '/cordova.variables.gradle/d' android/app/capacitor.build.gradle || true
 
       - name: Build Android APK

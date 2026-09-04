@@ -103,6 +103,24 @@ export default function App() {
       setTargetSharedUrl(shared);
     }
 
+    // Listen for Android Native DeepLink / App URL Open Intents from WhatsApp, Messenger, Gmail
+    try {
+      import('@capacitor/app').then(({ App: CapApp }) => {
+        CapApp.addListener('appUrlOpen', (event) => {
+          if (event && event.url) {
+            let extractedUrl = event.url;
+            if (extractedUrl.includes('http://') || extractedUrl.includes('https://')) {
+              const match = extractedUrl.match(/(https?:\/\/[^\s]+)/);
+              if (match) extractedUrl = match[0];
+              setTargetSharedUrl(extractedUrl);
+            }
+          }
+        });
+      }).catch((e) => console.log('Capacitor listener fallback on web:', e));
+    } catch (e) {
+      console.warn('Native intent listener init:', e);
+    }
+
     // Check stored user session
     const storedToken = localStorage.getItem('cypherbuddy_token');
     const isSetupDone = localStorage.getItem('cypherbuddy_setup_completed') === 'true';
@@ -328,13 +346,27 @@ export default function App() {
             ) : (
               <AdminAuthScreen
                 apiBaseUrl={API_BASE_URL}
-                onAdminAuthSuccess={(authData) => {
-                  setUser(authData.user);
-                }}
               />
             )
           )}
 
+          {/* FALLBACK SAFETY RENDER: PREVENT BLANK SCREEN GLITCHES */}
+          {!['landing', 'onboarding', 'auth', 'setup', 'home', 'scan', 'result', 'assistant', 'reports', 'family', 'permissions', 'admin'].includes(activeTab) && (
+            <HomeScreen
+              setActiveTab={setActiveTab}
+              setScannerType={setScannerType}
+              history={history}
+              onSelectScanItem={(item) => {
+                setCurrentScanResult(item);
+                setActiveTab('result');
+              }}
+              onSelectTroubleshoot={(q) => {
+                setAssistantQuery(q);
+                setActiveTab('assistant');
+              }}
+              onTriggerGatewayNotification={handleTriggerGatewayNotification}
+            />
+          )}
 
         </main>
 

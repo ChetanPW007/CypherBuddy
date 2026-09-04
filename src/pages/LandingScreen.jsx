@@ -1,6 +1,6 @@
 import React from 'react';
 import GlassCard from '../components/GlassCard';
-import { ShieldCheck, Bot, FileText, ArrowRight, Lock, CheckCircle2, ChevronRight, Zap } from 'lucide-react';
+import { ShieldCheck, Bot, FileText, ArrowRight, Lock, Zap } from 'lucide-react';
 
 export default function LandingScreen({ onGetStarted, onLearnMore }) {
   return (

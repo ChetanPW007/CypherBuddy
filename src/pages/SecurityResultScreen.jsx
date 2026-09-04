@@ -6,17 +6,13 @@ import { exportReportToPDF } from '../services/pdfService';
 import { 
   ShieldCheck, 
   ShieldAlert, 
-  AlertTriangle, 
-  Download, 
-  ExternalLink, 
-  Share2, 
+  Download,
+  Share2,
   ArrowLeft, 
   Eye, 
   ChevronDown, 
   ChevronUp, 
-  Terminal, 
-  FileCode, 
-  Lock
+  Terminal
 } from 'lucide-react';
 
 export default function SecurityResultScreen({ result, onBack, onSendFamilyAlert }) {
@@ -27,7 +23,6 @@ export default function SecurityResultScreen({ result, onBack, onSendFamilyAlert
 
   const isDangerous = result.status === 'DANGEROUS';
   const isSuspicious = result.status === 'SUSPICIOUS';
-  const isSafe = result.status === 'SAFE';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: '90px' }}>

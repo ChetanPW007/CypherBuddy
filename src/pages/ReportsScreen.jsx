@@ -7,9 +7,7 @@ import {
   AlertTriangle, 
   Download, 
   Search, 
-  Filter, 
-  ChevronRight,
-  Printer
+  ChevronRight
 } from 'lucide-react';
 import { exportReportToPDF } from '../services/pdfService';
 

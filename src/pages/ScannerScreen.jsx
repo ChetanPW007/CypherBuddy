@@ -8,10 +8,7 @@ import {
   UploadCloud, 
   ShieldCheck, 
   AlertCircle,
-  FileCode,
   QrCode,
-  Sparkles,
-  ArrowRight,
   CheckCircle2
 } from 'lucide-react';
 import { analyzeUrl, analyzeFile, analyzeMessage, analyzeImageOrQr } from '../services/securityService';
@@ -393,7 +390,7 @@ export default function ScannerScreen({
                   type="file" 
                   accept="image/*"
                   style={{ display: 'none' }} 
-                  onChange={(e) => { 
+                  onChange={() => {
                     setQrText('http://paypal-security-alert-2026.xyz/login'); 
                     handleStartScan('http://paypal-security-alert-2026.xyz/login'); 
                   }}

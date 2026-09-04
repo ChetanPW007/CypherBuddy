@@ -1,17 +1,12 @@
 import React from 'react';
 import GlassCard from './GlassCard';
 import { 
-  ShieldCheck, 
-  Smartphone, 
+  Smartphone,
   Monitor, 
   Lock, 
-  Share2, 
-  FileText, 
+  FileText,
   X, 
   CheckCircle2, 
-  AlertCircle,
-  HelpCircle,
-  ExternalLink,
   Layers
 } from 'lucide-react';
 

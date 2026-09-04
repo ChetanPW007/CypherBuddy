@@ -5,15 +5,10 @@ import {
   CheckCircle2, 
   ArrowRight, 
   Lock, 
-  FileText, 
-  Camera, 
-  FolderCheck, 
-  Bell, 
-  Share2, 
-  ChevronRight,
+  FolderCheck,
+  Share2,
   ShieldAlert,
-  AlertTriangle,
-  Sparkles
+  AlertTriangle
 } from 'lucide-react';
 
 export default function OnboardingScreen({ onComplete }) {

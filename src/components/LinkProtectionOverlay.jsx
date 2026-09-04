@@ -2,13 +2,8 @@ import React, { useState, useEffect } from 'react';
 import GlassCard from './GlassCard';
 import { 
   ShieldAlert, 
-  ShieldCheck, 
-  AlertTriangle, 
-  ArrowRight, 
-  X, 
-  ExternalLink, 
+  AlertTriangle,
   RefreshCw,
-  Globe,
   FileText
 } from 'lucide-react';
 import { safeApiCall } from '../config/apiConfig';
@@ -45,15 +40,16 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
           if (data.recommended_action === 'allow' || data.risk_level === 'low') {
             try {
               await Browser.open({ url: targetUrl });
-            } catch (e) {
-              window.open(targetUrl, '_system') || (window.location.href = targetUrl);
+            } catch {
+              const opened = window.open(targetUrl, '_system');
+              if (!opened) window.location.href = targetUrl;
             }
             onClose();
           }
         } else {
           setError(true);
         }
-      } catch (e) {
+      } catch {
         if (isMounted) setError(true);
       } finally {
         if (isMounted) setAnalyzing(false);
@@ -65,7 +61,7 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
     return () => {
       isMounted = false;
     };
-  }, [targetUrl]);
+  }, [targetUrl, onClose]);
 
   if (!targetUrl) return null;
 
@@ -230,7 +226,8 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
               </button>
               <button 
                 onClick={() => {
-                  window.open(targetUrl, '_system') || (window.location.href = targetUrl);
+                  const opened = window.open(targetUrl, '_system');
+                  if (!opened) window.location.href = targetUrl;
                   onClose();
                 }}
                 className="btn-primary" 

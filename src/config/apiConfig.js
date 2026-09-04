@@ -43,7 +43,7 @@ export async function safeApiCall(endpoint, options = {}) {
     let data;
     try {
       data = await response.json();
-    } catch (e) {
+    } catch {
       data = { detail: 'Unexpected server response format.' };
     }
 

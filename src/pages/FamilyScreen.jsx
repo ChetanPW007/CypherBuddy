@@ -5,14 +5,11 @@ import {
   ShieldAlert, 
   Smartphone, 
   Plus, 
-  CheckCircle, 
-  Lock, 
+  Lock,
   Bell, 
   ShieldCheck, 
-  AlertCircle,
   ToggleLeft,
-  ToggleRight,
-  Info
+  ToggleRight
 } from 'lucide-react';
 
 export default function FamilyScreen({ alerts = [], onClearAlert }) {

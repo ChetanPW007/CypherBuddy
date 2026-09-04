@@ -12,7 +12,6 @@ import {
   ShieldAlert, 
   AlertTriangle,
   History,
-  Sparkles,
   Shield,
   Smartphone
 } from 'lucide-react';

@@ -9,9 +9,7 @@ import {
   ArrowRight, 
   CheckCircle2, 
   AlertCircle, 
-  Settings,
-  Upload,
-  Globe
+  Settings
 } from 'lucide-react';
 import { bindDeviceToAccount } from '../utils/deviceInfo';
 
@@ -20,8 +18,7 @@ export default function FirstTimeSetupScreen({ onCompleteSetup }) {
   
   // Permission setup states
   const [linkProtectionEnabled, setLinkProtectionEnabled] = useState(true);
-  const [fileAccessConfigured, setFileAccessConfigured] = useState(true);
-  
+
   const [cameraState, setCameraState] = useState('prompt'); // prompt | granted | denied
   const [notificationState, setNotificationState] = useState(
     typeof Notification !== 'undefined' ? Notification.permission : 'prompt'
@@ -41,7 +38,7 @@ export default function FirstTimeSetupScreen({ onCompleteSetup }) {
       } else {
         setCameraState('granted');
       }
-    } catch (e) {
+    } catch {
       setCameraState('denied');
       localStorage.setItem('cypherbuddy_perm_camera', 'denied');
     }
@@ -57,7 +54,7 @@ export default function FirstTimeSetupScreen({ onCompleteSetup }) {
       } else {
         setNotificationState('granted');
       }
-    } catch (e) {
+    } catch {
       setNotificationState('denied');
     }
   };
@@ -67,7 +64,7 @@ export default function FirstTimeSetupScreen({ onCompleteSetup }) {
     localStorage.setItem('cypherbuddy_perm_link', 'configured');
     try {
       window.location.href = 'intent:#Intent;action=android.settings.APP_OPEN_BY_DEFAULT_SETTINGS;package=com.cypherbuddy.app;end';
-    } catch (e) {
+    } catch {
       try {
         window.location.href = 'intent:#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;package=com.cypherbuddy.app;end';
       } catch (err) {
@@ -84,8 +81,6 @@ export default function FirstTimeSetupScreen({ onCompleteSetup }) {
     setLoading(false);
     onCompleteSetup();
   };
-
-  const isAllConfigured = cameraState !== 'prompt' && notificationState !== 'prompt' && linkProtectionEnabled;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', padding: '16px 12px' }}>

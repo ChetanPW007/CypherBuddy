@@ -2,17 +2,6 @@ import React, { useState } from 'react';
 import GlassCard from './GlassCard';
 import { 
   Play, 
-  ShieldCheck, 
-  ShieldAlert, 
-  AlertTriangle, 
-  Share2, 
-  Link, 
-  Package, 
-  MessageSquare, 
-  Camera, 
-  ArrowRight,
-  Info,
-  CheckCircle2,
   Smartphone,
   Sparkles
 } from 'lucide-react';

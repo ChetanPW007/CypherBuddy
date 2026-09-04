@@ -1,6 +1,6 @@
 import React from 'react';
 import GlassCard from './GlassCard';
-import { Download, Sparkles, X, ShieldCheck } from 'lucide-react';
+import { Download, Sparkles, X } from 'lucide-react';
 import { Browser } from '@capacitor/browser';
 
 export default function AutoUpdateModal({ updateInfo, onClose }) {
@@ -10,7 +10,7 @@ export default function AutoUpdateModal({ updateInfo, onClose }) {
     const downloadUrl = updateInfo.apk_download_url || 'https://cypherbuddy-backend.onrender.com/api/app/download-apk';
     try {
       await Browser.open({ url: downloadUrl });
-    } catch (e) {
+    } catch {
       window.location.href = downloadUrl;
     }
     onClose();

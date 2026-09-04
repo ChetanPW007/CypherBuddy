@@ -1,19 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import GlassCard from '../components/GlassCard';
 import { 
-  ShieldCheck, 
-  Lock, 
+  Lock,
   Phone, 
-  Mail, 
-  KeyRound, 
+  KeyRound,
   ArrowRight, 
   ShieldAlert, 
-  Clock, 
   RefreshCw,
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
-import { API_BASE_URL, safeApiCall } from '../config/apiConfig';
+import { safeApiCall } from '../config/apiConfig';
 
 export default function AdminAuthScreen({ onAdminAuthSuccess }) {
   const [step, setStep] = useState(1); // Step 1: Credentials, Step 2: OTP

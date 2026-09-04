@@ -1,16 +1,99 @@
-# React + Vite
+# CypherBuddy
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+**CypherBuddy** is an AI-powered cybersecurity companion and link protection application designed for personal and family safety. Built with React, Vite, Capacitor for Android cross-platform support, and a Python FastAPI backend.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
 
-## React Compiler
+- **Link & QR Code Protection**: Real-time inspection of URLs, suspicious links, and QR codes for phishing, malware, and brand impersonation.
+- **APK Scanner**: Analyzes Android APK packages for dangerous permissions (e.g., SMS interception, overlay windows).
+- **AI Security Assistant**: Natural language security queries and troubleshooting powered by security-focused LLM integration.
+- **Family Safety Network**: Share real-time threat alerts with family members to protect vulnerable relatives.
+- **Security Gateway Banner**: Background notification overlay for active threat warnings and swift remediation.
+- **In-App Auto Update**: Built-in application version tracking and updates.
+- **Admin Security Dashboard**: 2-Step OTP-protected administrative monitoring panel.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## Tech Stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+### Frontend & Mobile
+- **Framework**: React 19 + Vite 8
+- **Mobile Runtime**: Capacitor 8 (Android target)
+- **Styling**: Glassmorphism CSS, Lucide Icons
+- **Linting**: Oxlint
+
+### Backend
+- **Framework**: Python FastAPI / Starlette
+- **Database**: SQLite / Async Engine
+- **SMS & Threat Intelligence**: Custom threat analysis engine & SMS integration
+
+---
+
+## Getting Started
+
+### Prerequisites
+- Node.js (v18+)
+- Python (v3.10+)
+- Android Studio (for Android build and emulation)
+
+### Installation
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/your-org/CypherBuddy.git
+   cd CypherBuddy
+   ```
+
+2. **Install Frontend Dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Install Backend Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+---
+
+## Development Workflow
+
+### Run Frontend Development Server
+```bash
+npm run dev
+```
+
+### Run Code Linter
+```bash
+npm run lint
+```
+
+### Build Web Distribution & Sync with Capacitor
+```bash
+npm run build
+npx cap sync android
+```
+
+### Run Backend Server
+```bash
+python backend/main.py
+```
+
+---
+
+## Documentation
+
+- [API Security Policy](API_SECURITY.md)
+- [Privacy Policy](PRIVACY.md)
+- [Security Architecture](SECURITY_ARCHITECTURE.md)
+- [Security Checklist](SECURITY_CHECKLIST.md)
+- [Third-Party APIs](THIRD_PARTY_APIS.md)
+- [Threat Model](THREAT_MODEL.md)
+
+---
+
+## License
+
+Private & Proprietary - CypherBuddy

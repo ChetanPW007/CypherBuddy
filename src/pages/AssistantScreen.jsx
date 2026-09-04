@@ -3,8 +3,7 @@ import GlassCard from '../components/GlassCard';
 import { 
   Bot, 
   Send, 
-  Upload, 
-  Video, 
+  Video,
   AlertTriangle, 
   CheckCircle, 
   Wifi, 
@@ -12,10 +11,7 @@ import {
   Smartphone, 
   Sparkles, 
   Play, 
-  ExternalLink,
-  ChevronRight,
-  HelpCircle,
-  Camera
+  ExternalLink
 } from 'lucide-react';
 import { troubleshootProblem } from '../services/assistantService';
 

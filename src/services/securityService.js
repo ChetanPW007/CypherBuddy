@@ -1,8 +1,6 @@
 // CypherBuddy Security Analysis Engine
 // Real Heuristic Scanner, SHA-256 Hasher, Risk Evaluator, and FastAPI Backend Integration
 
-import { safeApiCall } from '../config/apiConfig';
-
 export const MOCK_EXAMPLES = {
   dangerousLink: 'http://paypa1-account-security-update.xyz/login.php',
   suspiciousLink: 'https://free-giftcard-claim-2026.top/verify',
@@ -34,7 +32,7 @@ export async function calculateFileHash(file) {
     const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  } catch (e) {
+  } catch {
     return 'a94a8fe5ccb19ba61c4c0873d391e987982fbbd3' + Math.random().toString(16).substring(2, 10);
   }
 }
@@ -54,7 +52,7 @@ export function analyzeUrl(inputUrl) {
   try {
     const parsed = new URL(urlString);
     domain = parsed.hostname.toLowerCase();
-  } catch (e) {
+  } catch {
     domain = urlString;
   }
 

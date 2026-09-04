@@ -1,13 +1,12 @@
-import React from 'react';
-import { Shield, Sun, Moon, LogOut, Lock, Bell, User, Users, LayoutDashboard } from 'lucide-react';
+import { Shield, Sun, Moon, LogOut, Lock, User } from 'lucide-react';
 
 export default function Header({ 
   theme, 
   setTheme, 
   user, 
   onLogout, 
-  familyAlertCount = 0,
-  activeTab,
+  familyAlertCount: _familyAlertCount = 0,
+  activeTab: _activeTab,
   setActiveTab
 }) {
   const toggleTheme = () => {

@@ -1,15 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { 
+import {
   ShieldCheck, 
   ShieldAlert, 
   AlertTriangle, 
-  ExternalLink, 
-  X, 
-  ArrowRight, 
-  Sparkles, 
-  Clock,
-  Shield,
-  AlertCircle
+  X,
+  ArrowRight
 } from 'lucide-react';
 
 export default function SecurityGatewayBanner({ 
@@ -40,7 +34,7 @@ export default function SecurityGatewayBanner({
 
   if (!notification) return null;
 
-  const { status, riskScore, target, type, findings = [], recommendation } = notification;
+  const { status, riskScore, target, type } = notification;
   const isDangerous = status === 'DANGEROUS' || riskScore >= 70;
   const isSuspicious = status === 'SUSPICIOUS' || (riskScore >= 30 && riskScore < 70);
   const isSafe = status === 'SAFE' && riskScore < 30;

@@ -5,14 +5,10 @@ import {
   ShieldCheck, 
   ShieldAlert, 
   Activity, 
-  Users, 
-  FileText, 
-  BarChart3, 
+  BarChart3,
   TrendingUp, 
   Server, 
-  RefreshCw,
-  Clock,
-  ArrowUpRight
+  Clock
 } from 'lucide-react';
 
 export default function AdminDashboard({ history = [] }) {

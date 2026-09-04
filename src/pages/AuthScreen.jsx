@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import GlassCard from '../components/GlassCard';
-import { Lock, Mail, User, Phone, ShieldCheck, KeyRound, AlertTriangle, ArrowRight, RefreshCw, CheckCircle2, ShieldAlert, Globe, Eye, EyeOff } from 'lucide-react';
-import { API_BASE_URL, safeApiCall } from '../config/apiConfig';
+import { Lock, Mail, User, Phone, KeyRound, AlertTriangle, ArrowRight, RefreshCw, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { safeApiCall } from '../config/apiConfig';
 
 const COUNTRY_CODES = [
   { code: '+91', country: '🇮🇳 India (+91)' },
@@ -14,7 +14,7 @@ const COUNTRY_CODES = [
   { code: '+65', country: '🇸🇬 Singapore (+65)' }
 ];
 
-export default function AuthScreen({ onAuthSuccess, onBackToLanding }) {
+export default function AuthScreen({ onAuthSuccess, onBackToLanding: _onBackToLanding }) {
   const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState('');
   const [emailInput, setEmailInput] = useState('');
@@ -23,8 +23,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  
+
   // Single login contact state (for sign in)
   const [loginContact, setLoginContact] = useState('');
 

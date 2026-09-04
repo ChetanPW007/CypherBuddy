@@ -70,16 +70,34 @@ const INITIAL_FAMILY_ALERTS = [
 export default function App() {
   // Light Theme Default as requested
   const [theme, setTheme] = useState('light');
-  const [user, setUser] = useState(null); // { name, email, role, accessToken }
+  const [user, setUser] = useState(() => {
+    if (typeof localStorage === 'undefined') return null;
+    const storedToken = localStorage.getItem('cypherbuddy_token');
+    return storedToken ? { role: 'USER' } : null;
+  });
   const [onboarded, setOnboarded] = useState(false);
   
-  const [activeTab, setActiveTab] = useState('landing'); 
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof localStorage === 'undefined') return 'landing';
+    const storedToken = localStorage.getItem('cypherbuddy_token');
+    if (!storedToken) return 'landing';
+    const isSetupDone = localStorage.getItem('cypherbuddy_setup_completed') === 'true';
+    return isSetupDone ? 'home' : 'setup';
+  });
   const [scannerType, setScannerType] = useState('url');
   const [currentScanResult, setCurrentScanResult] = useState(null);
   const [assistantQuery, setAssistantQuery] = useState('');
 
   // Intercepted / Shared Link State
-  const [targetSharedUrl, setTargetSharedUrl] = useState(null);
+  const [targetSharedUrl, setTargetSharedUrl] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    const shared = params.get('url') || params.get('link') || params.get('text');
+    if (shared && (shared.startsWith('http://') || shared.startsWith('https://'))) {
+      return shared;
+    }
+    return null;
+  });
   const [updateAvailableInfo, setUpdateAvailableInfo] = useState(null);
   const CURRENT_APP_VERSION = "1.0.0";
   
@@ -101,8 +119,19 @@ export default function App() {
         if (l < c) return false;
       }
       return false;
-    } catch (e) {
+    } catch {
       return false;
+    }
+  };
+
+  const fetchUserReports = async () => {
+    try {
+      const res = await safeApiCall('/api/reports');
+      if (res && res.reports && Array.isArray(res.reports)) {
+        setHistory(res.reports);
+      }
+    } catch (e) {
+      console.warn('Failed to load user reports:', e);
     }
   };
 
@@ -132,17 +161,13 @@ export default function App() {
     securityAnimations: true
   });
 
-  // Apply default theme & restore persistent session / incoming share intents
+  // Apply default theme
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
-    // Check for shared URL query parameters (e.g. ?url=https://...)
-    const params = new URLSearchParams(window.location.search);
-    const shared = params.get('url') || params.get('link') || params.get('text');
-    if (shared && (shared.startsWith('http://') || shared.startsWith('https://'))) {
-      setTargetSharedUrl(shared);
-    }
-
+  // Restore persistent session / incoming share intents
+  useEffect(() => {
     // Listen for Android Native DeepLink / App URL Open Intents from WhatsApp, Messenger, Gmail
     try {
       import('@capacitor/app').then(({ App: CapApp }) => {
@@ -171,30 +196,13 @@ export default function App() {
 
     // Check stored user session
     const storedToken = localStorage.getItem('cypherbuddy_token');
-    const isSetupDone = localStorage.getItem('cypherbuddy_setup_completed') === 'true';
-
     if (storedToken) {
-      setUser({ role: 'USER' });
       bindDeviceToAccount();
-      fetchUserReports();
-      if (!isSetupDone) {
-        setActiveTab('setup');
-      } else {
-        setActiveTab('home');
-      }
+      setTimeout(() => {
+        fetchUserReports();
+      }, 0);
     }
   }, []);
-
-  const fetchUserReports = async () => {
-    try {
-      const res = await safeApiCall('/api/reports');
-      if (res && res.reports && Array.isArray(res.reports)) {
-        setHistory(res.reports);
-      }
-    } catch (e) {
-      console.warn('Failed to load user reports:', e);
-    }
-  };
 
   // Handle Onboarding finish
   const handleOnboardingComplete = () => {
@@ -284,7 +292,7 @@ export default function App() {
           setGatewayNotification(null);
           setActiveTab('result');
         }}
-        onContinueAction={(item) => {
+        onContinueAction={() => {
           // Action continued silently where safe
         }}
       />

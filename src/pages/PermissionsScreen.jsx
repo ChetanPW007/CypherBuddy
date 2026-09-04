@@ -4,20 +4,13 @@ import {
   FolderCheck, 
   Camera, 
   Bell, 
-  ShieldAlert, 
-  CheckCircle2, 
-  XCircle, 
-  Upload, 
-  Info,
-  ChevronRight,
-  Sliders,
   Shield,
   Zap,
   Lock,
   Layers,
-  Sparkles,
   Eye,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Upload
 } from 'lucide-react';
 import ArchitectureGatewayDocModal from '../components/ArchitectureGatewayDocModal';
 

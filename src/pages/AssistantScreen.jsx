@@ -13,7 +13,7 @@ import {
   Play, 
   ExternalLink
 } from 'lucide-react';
-import { troubleshootProblem } from '../services/assistantService';
+import { troubleshootProblem, troubleshootProblemOnline } from '../services/assistantService';
 
 export default function AssistantScreen({ initialQuery = '' }) {
   const [query, setQuery] = useState(initialQuery || '');
@@ -23,10 +23,15 @@ export default function AssistantScreen({ initialQuery = '' }) {
   const handleSearch = async (textToSearch = null) => {
     const text = textToSearch || query || 'wifi problem';
     setIsSearching(true);
-    await new Promise(r => setTimeout(r, 600));
-    const result = troubleshootProblem(text);
-    setCurrentResult(result);
-    setIsSearching(false);
+    try {
+      const result = await troubleshootProblemOnline(text);
+      setCurrentResult(result);
+    } catch {
+      const fallback = troubleshootProblem(text);
+      setCurrentResult(fallback);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   return (
@@ -131,6 +136,7 @@ export default function AssistantScreen({ initialQuery = '' }) {
           </GlassCard>
 
           {/* Visual Step Cards */}
+          {currentResult.steps && currentResult.steps.length > 0 ? (
           <div>
             <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#f8fafc', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <CheckCircle size={18} color="#34d399" /> Visual Step-by-Step Instructions
@@ -215,6 +221,7 @@ export default function AssistantScreen({ initialQuery = '' }) {
               ))}
             </div>
           </div>
+          ) : null}
 
           {/* YouTube Tutorial Recommendations Section */}
           <div>

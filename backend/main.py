@@ -6,6 +6,8 @@ import uuid
 import time
 import logging
 import datetime
+import secrets
+import json
 from typing import Optional, List, Dict, Any
 
 from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File, Request, status
@@ -16,11 +18,17 @@ import bcrypt
 import jwt
 
 try:
-    from backend.security_engine import analyze_url_hardened, analyze_message_hardened, validate_file_magic_bytes, is_ssrf_safe_url
+    from backend.security_engine import (
+        analyze_url_hardened, analyze_message_hardened, validate_file_magic_bytes, 
+        is_ssrf_safe_url, inspect_apk_archive, inspect_file_deep, resolve_troubleshooting_offline
+    )
     from backend.sms_service import generate_secure_otp, hash_otp, verify_otp_hash, mask_contact, send_otp
     from backend.db import init_db, get_database, close_db, mongo_client
 except ImportError:
-    from security_engine import analyze_url_hardened, analyze_message_hardened, validate_file_magic_bytes, is_ssrf_safe_url
+    from security_engine import (
+        analyze_url_hardened, analyze_message_hardened, validate_file_magic_bytes, 
+        is_ssrf_safe_url, inspect_apk_archive, inspect_file_deep, resolve_troubleshooting_offline
+    )
     from sms_service import generate_secure_otp, hash_otp, verify_otp_hash, mask_contact, send_otp
     from db import init_db, get_database, close_db, mongo_client
 
@@ -89,6 +97,8 @@ OTP_REQUESTS_DB: Dict[str, Dict[str, Any]] = {}
 REPORTS_DB: List[Dict[str, Any]] = []
 AUDIT_LOGS_DB: List[Dict[str, Any]] = []
 FAILED_LOGIN_ATTEMPTS: Dict[str, List[float]] = {}
+FAMILY_MEMBERS_DB: List[Dict[str, Any]] = []
+FAMILY_ALERTS_DB: List[Dict[str, Any]] = []
 
 async def log_audit_event(event_type: str, user_id: str, details: str, ip_address: str = "unknown"):
     """Records security audit events to MongoDB audit_logs and local audit log stream."""
@@ -260,6 +270,20 @@ class DeviceRegisterRequest(BaseModel):
     platform: Optional[str] = "Android"
     app_version: Optional[str] = "1.0.0"
     protection_status: Optional[str] = "ACTIVE"
+
+class FamilyPairRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=50)
+    relation: str = Field(default="Family Member", max_length=50)
+
+class FamilyAlertRequest(BaseModel):
+    device_name: str
+    threat_type: str
+    risk_score: int
+    target: str
+
+class AssistantChatRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=500)
+    device_type: Optional[str] = "Android"
 
 # Helper Functions for JWT Auth
 def create_access_token(data: dict, expires_delta: Optional[datetime.timedelta] = None):
@@ -514,9 +538,11 @@ async def admin_verify_otp(req: AdminVerifyOtpRequest, request: Request):
                 otp_entry = OTP_REQUESTS_DB[qc]
                 break
 
-    # Master backup OTP bypass (123456) guarantee
+    # Development OTP bypass: Only permitted if ALLOW_DEV_OTP is explicitly enabled in environment
+    allow_dev_otp = os.getenv("ALLOW_DEV_OTP", "false").lower() in ("true", "1", "yes")
+
     if not otp_entry:
-        if req.otp.strip() == "123456":
+        if allow_dev_otp and req.otp.strip() == "123456":
             otp_entry = {
                 "contact": contact_clean,
                 "hash": hash_otp("123456"),
@@ -524,6 +550,7 @@ async def admin_verify_otp(req: AdminVerifyOtpRequest, request: Request):
                 "attempts": 0,
                 "admin_user_id": "admin_101"
             }
+            logger.warning(f"DEV_OTP_SESSION: Created dev bypass session for {contact_clean}")
         else:
             await log_audit_event("OTP_VERIFY_FAILED", contact_clean, "No active OTP request found", client_ip)
             raise HTTPException(status_code=400, detail="Invalid or expired OTP request. Please request a new OTP.")
@@ -545,8 +572,9 @@ async def admin_verify_otp(req: AdminVerifyOtpRequest, request: Request):
         raise HTTPException(status_code=429, detail="Too many failed OTP attempts. Please restart admin login.")
 
     is_valid_otp = verify_otp_hash(req.otp.strip(), otp_entry["hash"])
-    if not is_valid_otp and req.otp.strip() == "123456":
+    if not is_valid_otp and allow_dev_otp and req.otp.strip() == "123456":
         is_valid_otp = True
+        logger.warning(f"DEV_OTP_ACCEPTED: Development bypass accepted for {contact_clean}")
 
 
 
@@ -702,25 +730,15 @@ async def scan_file(file: UploadFile = File(...), user: Dict[str, Any] = Depends
     with open(save_path, "wb") as f:
         f.write(contents)
 
-    import hashlib
-    sha256_hash = hashlib.sha256(contents).hexdigest()
+    # Real Static Bytecode & Permission Inspection
+    if file.filename.lower().endswith(".apk"):
+        result = inspect_apk_archive(contents, file.filename)
+    else:
+        result = inspect_file_deep(contents, file.filename)
 
-    result = {
-        "id": f"FILE-{uuid.uuid4().hex[:6]}",
-        "type": "APK" if file.filename.endswith(".apk") else "FILE",
-        "target": file.filename,
-        "size": f"{(len(contents) / (1024*1024)):.2f} MB",
-        "hash": sha256_hash,
-        "riskScore": 88 if file.filename.endswith(".apk") and "mod" in file.filename.lower() else 15,
-        "status": "DANGEROUS" if "mod" in file.filename.lower() else "SAFE",
-        "findings": [
-            {"type": "SAFE", "title": "Magic Byte Header Verified", "desc": magic_msg},
-            {"type": "SAFE", "title": "SHA-256 Hash Signature", "desc": sha256_hash}
-        ],
-        "recommendation": "File quarantined safely. Safe to view details.",
-        "userId": user["id"],
-        "timestamp": datetime.datetime.utcnow().isoformat()
-    }
+    result["userId"] = user["id"]
+    result["timestamp"] = datetime.datetime.utcnow().isoformat()
+    result["quarantinePath"] = safe_filename
 
     REPORTS_DB.append(result)
     db = await get_database()
@@ -807,6 +825,145 @@ async def get_admin_users(user: Dict[str, Any] = Depends(require_role(["ADMIN"])
             "termsAcceptedAt": u.get("termsAcceptedAt")
         })
     return {"users": clean_users}
+
+# ----------------------------------------------------
+# FAMILY SAFETY NETWORK ENDPOINTS
+# ----------------------------------------------------
+
+@app.get("/api/family/members")
+async def get_family_members(user: Dict[str, Any] = Depends(get_current_user)):
+    db = await get_database()
+    if db is not None:
+        cursor = db.family_members.find({"guardian_id": user["id"]}, {"_id": 0})
+        members = await cursor.to_list(length=50)
+        return {"members": members}
+    
+    members = [m for m in FAMILY_MEMBERS_DB if m.get("guardian_id") == user["id"]]
+    return {"members": members}
+
+@app.post("/api/family/pair")
+async def pair_family_device(req: FamilyPairRequest, user: Dict[str, Any] = Depends(get_current_user)):
+    member_id = f"FAM-{uuid.uuid4().hex[:6].upper()}"
+    pair_token = f"PAIR-{secrets.token_hex(4).upper()}"
+    
+    record = {
+        "id": member_id,
+        "guardian_id": user["id"],
+        "name": req.name.strip(),
+        "relation": req.relation.strip(),
+        "pair_token": pair_token,
+        "protected": True,
+        "status": "All Safe",
+        "created_at": datetime.datetime.utcnow().isoformat()
+    }
+    
+    FAMILY_MEMBERS_DB.append(record)
+    db = await get_database()
+    if db is not None:
+        await db.family_members.insert_one(record.copy())
+        
+    await log_audit_event("FAMILY_DEVICE_PAIRED", user["id"], f"Paired {req.name} ({req.relation})")
+    return {"status": "paired", "member": record}
+
+@app.delete("/api/family/members/{member_id}")
+async def remove_family_member(member_id: str, user: Dict[str, Any] = Depends(get_current_user)):
+    global FAMILY_MEMBERS_DB
+    FAMILY_MEMBERS_DB = [m for m in FAMILY_MEMBERS_DB if not (m["id"] == member_id and m.get("guardian_id") == user["id"])]
+    
+    db = await get_database()
+    if db is not None:
+        await db.family_members.delete_one({"id": member_id, "guardian_id": user["id"]})
+        
+    await log_audit_event("FAMILY_DEVICE_REMOVED", user["id"], f"Removed member {member_id}")
+    return {"status": "deleted", "id": member_id}
+
+@app.get("/api/family/alerts")
+async def get_family_alerts(user: Dict[str, Any] = Depends(get_current_user)):
+    db = await get_database()
+    if db is not None:
+        cursor = db.family_alerts.find({"guardian_id": user["id"], "resolved": False}, {"_id": 0}).sort("timestamp", -1)
+        alerts = await cursor.to_list(length=50)
+        return {"alerts": alerts}
+        
+    alerts = [a for a in FAMILY_ALERTS_DB if a.get("guardian_id") == user["id"] and not a.get("resolved")]
+    return {"alerts": alerts}
+
+@app.post("/api/family/alert")
+async def create_family_alert(req: FamilyAlertRequest, user: Dict[str, Any] = Depends(get_current_user)):
+    alert_id = f"ALT-{uuid.uuid4().hex[:6].upper()}"
+    alert_record = {
+        "id": alert_id,
+        "guardian_id": user["id"],
+        "deviceName": req.device_name,
+        "threatType": req.threat_type,
+        "riskScore": req.risk_score,
+        "target": req.target,
+        "resolved": False,
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }
+    
+    FAMILY_ALERTS_DB.append(alert_record)
+    db = await get_database()
+    if db is not None:
+        await db.family_alerts.insert_one(alert_record.copy())
+        
+    await log_audit_event("FAMILY_ALERT_TRIGGERED", user["id"], f"Alert on {req.device_name}: {req.threat_type}")
+    return {"status": "alert_received", "alert": alert_record}
+
+@app.post("/api/family/alerts/{alert_id}/resolve")
+async def resolve_family_alert(alert_id: str, user: Dict[str, Any] = Depends(get_current_user)):
+    for a in FAMILY_ALERTS_DB:
+        if a.get("id") == alert_id:
+            a["resolved"] = True
+            
+    db = await get_database()
+    if db is not None:
+        await db.family_alerts.update_one({"id": alert_id}, {"$set": {"resolved": True}})
+        
+    return {"status": "resolved", "id": alert_id}
+
+# ----------------------------------------------------
+# AI CYBERSECURITY & TROUBLESHOOTING ASSISTANT
+# ----------------------------------------------------
+
+@app.post("/api/assistant/chat")
+async def assistant_chat(req: AssistantChatRequest, user: Dict[str, Any] = Depends(get_current_user)):
+    query = req.query.strip()
+    gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
+    
+    # If Gemini API key is configured, use it for rich dynamic responses
+    if gemini_key:
+        try:
+            import urllib.request
+            prompt = (
+                "You are CypherBuddy, an AI cybersecurity and device troubleshooting companion designed for everyday users. "
+                "Provide simple, numbered, step-by-step instructions. Never use overly technical jargon. "
+                "Always emphasize personal privacy and security best practices. Keep responses concise (under 250 words).\n\n"
+                f"User Question: {query}\nDevice: {req.device_type}"
+            )
+            payload = json.dumps({
+                "contents": [{"parts": [{"text": prompt}]}]
+            }).encode('utf-8')
+            
+            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
+            req_obj = urllib.request.Request(gemini_url, data=payload, headers={"Content-Type": "application/json"})
+            
+            with urllib.request.urlopen(req_obj, timeout=10) as response:
+                resp_json = json.loads(response.read().decode('utf-8'))
+                ai_text = resp_json['candidates'][0]['content']['parts'][0]['text']
+                
+                return {
+                    "source": "gemini_ai",
+                    "title": f"Guidance: {query[:40]}",
+                    "summary": ai_text,
+                    "youtube_search_url": f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(query + ' fix step by step')}"
+                }
+        except Exception as e:
+            logger.warning(f"Gemini API request failed, falling back to local security engine: {str(e)}")
+
+    # Fallback to local high-precision knowledge resolver
+    fallback_res = resolve_troubleshooting_offline(query)
+    return fallback_res
 
 @app.get("/api/app/version")
 async def get_app_version():

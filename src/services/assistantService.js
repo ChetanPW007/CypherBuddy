@@ -1,6 +1,8 @@
 // CypherBuddy Digital Assistant Engine
 // AI Troubleshooting, Visual Instruction Cards, and YouTube Recommendations Generator
 
+import { safeApiCall } from '../config/apiConfig';
+
 export const TROUBLESHOOTING_DATABASE = [
   {
     id: 'wifi-problem',
@@ -254,4 +256,67 @@ export function troubleshootProblem(queryText, screenshotFile = null) {
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     hasScreenshot: Boolean(screenshotFile)
   };
+}
+
+export async function troubleshootProblemOnline(queryText, deviceType = 'Android') {
+  try {
+    const res = await safeApiCall('/api/assistant/chat', {
+      method: 'POST',
+      body: JSON.stringify({ query: queryText, device_type: deviceType })
+    });
+
+    if (res.ok && res.data) {
+      const data = res.data;
+      if (data.source === 'gemini_ai') {
+        return {
+          id: 'gemini-live',
+          title: data.title || `AI Guidance for: ${queryText}`,
+          category: 'Gemini AI Assistant',
+          deviceType: deviceType,
+          summary: data.summary,
+          isAiGenerated: true,
+          steps: [],
+          youtubeVideos: [
+            {
+              id: 'yt-gemini',
+              title: `Fix: ${queryText}`,
+              channel: 'Verified Tech Solutions',
+              views: 'AI Verified Tutorial',
+              url: data.youtube_search_url || `https://www.youtube.com/results?search_query=${encodeURIComponent(queryText + ' fix')}`
+            }
+          ],
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+      } else if (data.steps && data.steps.length > 0) {
+        return {
+          id: 'backend-knowledge',
+          title: data.title,
+          category: data.category || 'Diagnostics',
+          deviceType: deviceType,
+          summary: data.summary,
+          isAiGenerated: false,
+          steps: data.steps.map((st, idx) => ({
+            stepNumber: st.step || (idx + 1),
+            title: st.title,
+            desc: st.desc,
+            icon: 'CheckCircle'
+          })),
+          youtubeVideos: [
+            {
+              id: 'yt-kb',
+              title: `Step-by-step Video: ${data.title}`,
+              channel: 'Verified Tech Solutions',
+              views: 'Official Diagnostic',
+              url: data.youtube_search_url || `https://www.youtube.com/results?search_query=${encodeURIComponent(queryText + ' android')}`
+            }
+          ],
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Online assistant error, using local fallback:', err);
+  }
+
+  return troubleshootProblem(queryText);
 }

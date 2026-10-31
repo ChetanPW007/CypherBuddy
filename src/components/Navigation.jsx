@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Scan, Bot, FileText, Users, SlidersHorizontal, LayoutDashboard } from 'lucide-react';
+import { Home, Scan, Bot, FileText, Users, SlidersHorizontal, LayoutDashboard, BookOpen } from 'lucide-react';
 
 export default function Navigation({ activeTab, setActiveTab }) {
   const navItems = [
@@ -7,6 +7,7 @@ export default function Navigation({ activeTab, setActiveTab }) {
     { id: 'scan', label: 'Scan', icon: Scan },
     { id: 'assistant', label: 'Assistant', icon: Bot },
     { id: 'reports', label: 'Reports', icon: FileText },
+    { id: 'case-study', label: 'Case Study', icon: BookOpen },
     { id: 'family', label: 'Family', icon: Users },
     { id: 'permissions', label: 'Shield', icon: SlidersHorizontal },
     { id: 'admin', label: 'Admin', icon: LayoutDashboard }

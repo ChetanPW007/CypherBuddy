@@ -13,7 +13,8 @@ import {
   AlertTriangle,
   History,
   Shield,
-  Smartphone
+  Smartphone,
+  BookOpen
 } from 'lucide-react';
 import BackgroundGatewaySimulator from '../components/BackgroundGatewaySimulator';
 
@@ -180,6 +181,32 @@ export default function HomeScreen({
             <span>📸 QR / Screenshot</span>
           </button>
         </div>
+      </GlassCard>
+
+      {/* Case Study Feature Card for College Presentation & Viva */}
+      <GlassCard style={{ background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.15), rgba(15, 23, 42, 0.9))', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <span className="glass-pill" style={{ color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)', background: 'rgba(56, 189, 248, 0.1)' }}>
+            <BookOpen size={13} /> Academic Presentation & Viva Guide
+          </span>
+          <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 700 }}>Python Web Security</span>
+        </div>
+
+        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: '4px 0', color: '#f8fafc' }}>
+          Case Study: Secure Coding in Python Web Apps
+        </h3>
+
+        <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: '0 0 12px 0', lineHeight: 1.4 }}>
+          Explore the 6 key security weaknesses, simple explanations, impact & fix priorities, secure coding principles, SSDLC flowchart, and viva Q&A defense answers.
+        </p>
+
+        <button
+          onClick={() => setActiveTab('case-study')}
+          className="btn-primary"
+          style={{ width: '100%', fontSize: '0.85rem', padding: '10px', background: 'linear-gradient(135deg, #0284c7, #0369a1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+        >
+          <BookOpen size={16} /> Launch Interactive Case Study Presentation
+        </button>
       </GlassCard>
 
       {/* Interactive Background Security Gateway Simulator */}

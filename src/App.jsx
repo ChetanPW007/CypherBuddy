@@ -16,6 +16,7 @@ import PermissionsScreen from './pages/PermissionsScreen';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminAuthScreen from './pages/AdminAuthScreen';
 import FirstTimeSetupScreen from './pages/FirstTimeSetupScreen';
+import CaseStudyScreen from './pages/CaseStudyScreen';
 import LinkProtectionOverlay from './components/LinkProtectionOverlay';
 import AutoUpdateModal from './components/AutoUpdateModal';
 
@@ -397,6 +398,11 @@ export default function App() {
             />
           )}
 
+          {/* VIEW: CASE STUDY & VIVA GUIDE */}
+          {activeTab === 'case-study' && (
+            <CaseStudyScreen />
+          )}
+
           {/* VIEW: FAMILY SAFETY */}
           {activeTab === 'family' && (
             <FamilyScreen
@@ -428,7 +434,7 @@ export default function App() {
           )}
 
           {/* FALLBACK SAFETY RENDER: PREVENT BLANK SCREEN GLITCHES */}
-          {!['landing', 'onboarding', 'auth', 'setup', 'home', 'scan', 'result', 'assistant', 'reports', 'family', 'permissions', 'admin'].includes(activeTab) && (
+          {!['landing', 'onboarding', 'auth', 'setup', 'home', 'scan', 'result', 'assistant', 'reports', 'case-study', 'family', 'permissions', 'admin'].includes(activeTab) && (
             <HomeScreen
               setActiveTab={setActiveTab}
               setScannerType={setScannerType}

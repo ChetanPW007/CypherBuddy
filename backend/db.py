@@ -4,13 +4,20 @@
 import os
 import logging
 from typing import Optional, Dict, Any
-from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo import ASCENDING, DESCENDING
+
+try:
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from pymongo import ASCENDING, DESCENDING
+    MOTOR_AVAILABLE = True
+except ImportError:
+    AsyncIOMotorClient = Any  # type: ignore
+    ASCENDING, DESCENDING = 1, -1
+    MOTOR_AVAILABLE = False
 
 logger = logging.getLogger("cypherbuddy.db")
 
 # Global Motor MongoDB client and database handles
-mongo_client: Optional[AsyncIOMotorClient] = None
+mongo_client: Optional[Any] = None
 db = None
 
 async def init_db():
@@ -20,8 +27,8 @@ async def init_db():
     uri = os.getenv("MONGODB_URI", "").strip()
     db_name = os.getenv("DATABASE_NAME", "cypherbuddy").strip()
     
-    if not uri:
-        logger.warning("MONGODB_URI not provided in environment. Running with in-memory state fallback.")
+    if not MOTOR_AVAILABLE or not uri:
+        logger.warning("Motor not installed or MONGODB_URI not provided. Running with in-memory state fallback.")
         return False
 
     try:

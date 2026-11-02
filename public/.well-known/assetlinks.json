@@ -5,7 +5,7 @@
       "namespace": "android_app",
       "package_name": "com.cypherbuddy.app",
       "sha256_cert_fingerprints": [
-        "REPLACE_WITH_RELEASE_KEYSTORE_SHA256_FINGERPRINT"
+        "C8:82:BC:3A:9B:DF:05:8D:41:6A:61:3C:A1:73:9D:26:5A:8E:CC:A1:48:C6:64:FA:F4:35:8C:1B:0C:92:7A:D5"
       ]
     }
   }

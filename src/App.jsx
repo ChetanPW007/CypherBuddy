@@ -216,6 +216,10 @@ export default function App() {
     setUser(authData.user);
     bindDeviceToAccount();
     fetchUserReports();
+    if (authData.role === 'ADMIN' || authData.user?.role === 'ADMIN') {
+      setActiveTab('admin');
+      return;
+    }
     const isSetupDone = localStorage.getItem('cypherbuddy_setup_completed') === 'true';
     if (!isSetupDone) {
       setActiveTab('setup');

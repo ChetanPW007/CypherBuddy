@@ -572,8 +572,9 @@ async def admin_verify_otp(req: AdminVerifyOtpRequest, request: Request):
                 otp_entry = OTP_REQUESTS_DB[qc]
                 break
 
-    # Development OTP bypass: Only permitted if ALLOW_DEV_OTP is explicitly enabled in environment
-    allow_dev_otp = os.getenv("ALLOW_DEV_OTP", "false").lower() in ("true", "1", "yes")
+    # Development OTP bypass: Permitted if ALLOW_DEV_OTP is enabled or in mock SMS mode
+    is_mock_mode = os.getenv("SMS_PROVIDER", "mock").lower() == "mock" or not os.getenv("SMS_API_KEY")
+    allow_dev_otp = os.getenv("ALLOW_DEV_OTP", "true" if is_mock_mode else "false").lower() in ("true", "1", "yes")
 
     if not otp_entry:
         if allow_dev_otp and req.otp.strip() == "123456":

@@ -48,7 +48,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_EXPIRE_MINUTES", "60"))
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 # Environment Domain Configuration
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://cypherbuddy.vercel.app")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://cypherbuddy-opal.vercel.app")
 CORS_ORIGINS = [
     "*",
     "https://cypherbuddy-opal.vercel.app",

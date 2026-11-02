@@ -38,8 +38,19 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
 
-            <!-- Intent Filter for Catching Web Links Tapped in WhatsApp, Messenger, Gmail, SMS -->
+            <!-- Verified App Link: links to our own site open silently in the app.
+                 Requires https://cypherbuddy-opal.vercel.app/.well-known/assetlinks.json -->
             <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="cypherbuddy-opal.vercel.app" />
+            </intent-filter>
+
+            <!-- Any http(s) link tapped in WhatsApp, Messenger, Gmail, SMS.
+                 No autoVerify here: Android can only verify hosts we own. This filter makes
+                 CypherBuddy selectable in the "Open with" chooser and as the default browser. -->
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />

@@ -50,18 +50,58 @@ jobs:
           find . -name "build.gradle" -exec sed -i "s/androidxBrowserVersion : '1.9.0'/androidxBrowserVersion : '1.8.0'/g" {} + || true
           sed -i '/cordova.variables.gradle/d' android/app/capacitor.build.gradle || true
 
-      - name: Build Android APK
+      - name: Decode release keystore (if configured)
+        id: keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::ANDROID_KEYSTORE_BASE64 secret not set - building a debug APK (not suitable for App Links verification)."
+          fi
+
+      - name: Build signed release APK
+        if: steps.keystore.outputs.available == 'true'
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          cd android
+          sed -i 's/\r$//' gradlew
+          chmod +x gradlew
+          ./gradlew assembleRelease -x lint -x test -x checkReleaseAarMetadata --no-daemon --stacktrace
+
+      - name: Show signing fingerprint for assetlinks.json
+        if: steps.keystore.outputs.available == 'true'
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          FP=$(keytool -list -v -keystore "$RUNNER_TEMP/release.keystore" -alias "$KEY_ALIAS" -storepass "$KEYSTORE_PASSWORD" | grep "SHA256:" | head -1 | sed 's/.*SHA256: //')
+          echo "### assetlinks.json SHA-256 fingerprint" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$FP\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build debug APK (fallback)
+        if: steps.keystore.outputs.available != 'true'
         run: |
           cd android
           sed -i 's/\r$//' gradlew
           chmod +x gradlew
           ./gradlew assembleDebug -x lint -x test -x checkDebugAarMetadata -x checkReleaseAarMetadata --no-daemon --stacktrace
 
-      - name: Upload Android Debug APK
+      - name: Upload Android APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: CypherBuddy-Android-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
           retention-days: 30
 

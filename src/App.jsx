@@ -172,24 +172,31 @@ export default function App() {
     // Listen for Android Native DeepLink / App URL Open Intents from WhatsApp, Messenger, Gmail
     try {
       import('@capacitor/app').then(({ App: CapApp }) => {
-        CapApp.addListener('appUrlOpen', (event) => {
-          if (event && event.url) {
-            let extractedUrl = event.url;
-            if (extractedUrl.includes('http://') || extractedUrl.includes('https://')) {
-              const match = extractedUrl.match(/(https?:\/\/[^\s]+)/);
-              if (match) extractedUrl = match[0];
+        const handleIncomingUrl = (rawUrl) => {
+          if (!rawUrl) return;
+          let extractedUrl = rawUrl;
+          if (extractedUrl.includes('http://') || extractedUrl.includes('https://')) {
+            const match = extractedUrl.match(/(https?:\/\/[^\s]+)/);
+            if (match) extractedUrl = match[0];
 
-              const now = Date.now();
-              if (extractedUrl === lastProcessedUrl.current && (now - lastProcessedTime.current < 12000)) {
-                return; // Prevent duplicate loop triggers
-              }
-
-              lastProcessedUrl.current = extractedUrl;
-              lastProcessedTime.current = now;
-              setTargetSharedUrl(extractedUrl);
+            const now = Date.now();
+            if (extractedUrl === lastProcessedUrl.current && (now - lastProcessedTime.current < 12000)) {
+              return; // Prevent duplicate loop triggers
             }
+
+            lastProcessedUrl.current = extractedUrl;
+            lastProcessedTime.current = now;
+            setTargetSharedUrl(extractedUrl);
           }
-        });
+        };
+
+        // Warm start: link tapped / shared while the app is already running
+        CapApp.addListener('appUrlOpen', (event) => handleIncomingUrl(event && event.url));
+
+        // Cold start: the app was launched by the link itself (the event may fire before JS is ready)
+        CapApp.getLaunchUrl()
+          .then((launch) => handleIncomingUrl(launch && launch.url))
+          .catch(() => {});
       }).catch((e) => console.log('Capacitor listener fallback on web:', e));
     } catch (e) {
       console.warn('Native intent listener init:', e);

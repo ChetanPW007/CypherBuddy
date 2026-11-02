@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import SecurityGatewayBanner from './components/SecurityGatewayBanner';
@@ -102,8 +102,8 @@ export default function App() {
   const [updateAvailableInfo, setUpdateAvailableInfo] = useState(null);
   const CURRENT_APP_VERSION = "1.0.0";
   
-  const lastProcessedUrl = React.useRef('');
-  const lastProcessedTime = React.useRef(0);
+  const lastProcessedUrl = useRef('');
+  const lastProcessedTime = useRef(0);
 
   const [history, setHistory] = useState(INITIAL_HISTORY);
   const [familyAlerts, setFamilyAlerts] = useState(INITIAL_FAMILY_ALERTS);

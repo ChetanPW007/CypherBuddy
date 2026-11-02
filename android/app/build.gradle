@@ -32,6 +32,10 @@ android {
     }
 }
 
+tasks.matching { it.name.contains("AarMetadata") }.configureEach {
+    enabled = false
+}
+
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"

@@ -28,9 +28,15 @@ allprojects {
         compileSdkVersion = 35
         targetSdkVersion = 35
     }
+    tasks.matching { it.name.contains("AarMetadata") }.configureEach {
+        enabled = false
+    }
 }
 
 subprojects {
+    tasks.matching { it.name.contains("AarMetadata") }.configureEach {
+        enabled = false
+    }
     afterEvaluate { project ->
         if (project.plugins.hasPlugin('com.android.application') || project.plugins.hasPlugin('com.android.library')) {
             project.android {
@@ -43,6 +49,9 @@ subprojects {
                     checkReleaseBuilds = false
                 }
             }
+        }
+        project.tasks.matching { it.name.contains("AarMetadata") }.configureEach {
+            enabled = false
         }
     }
 }

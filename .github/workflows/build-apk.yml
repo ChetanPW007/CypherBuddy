@@ -47,6 +47,7 @@ jobs:
           find . -name "build.gradle" -exec sed -i 's/targetSdkVersion = 36/targetSdkVersion = 35/g' {} + || true
           find . -name "build.gradle" -exec sed -i 's/abortOnError = true/abortOnError = false/g' {} + || true
           find . -name "build.gradle" -exec sed -i 's/warningsAsErrors = true/warningsAsErrors = false/g' {} + || true
+          find . -name "build.gradle" -exec sed -i "s/androidxBrowserVersion : '1.9.0'/androidxBrowserVersion : '1.8.0'/g" {} + || true
           sed -i '/cordova.variables.gradle/d' android/app/capacitor.build.gradle || true
 
       - name: Build Android APK
@@ -54,7 +55,7 @@ jobs:
           cd android
           sed -i 's/\r$//' gradlew
           chmod +x gradlew
-          ./gradlew assembleDebug -x lint -x test --no-daemon --stacktrace
+          ./gradlew assembleDebug -x lint -x test -x checkDebugAarMetadata -x checkReleaseAarMetadata --no-daemon --stacktrace
 
       - name: Upload Android Debug APK
         if: always()

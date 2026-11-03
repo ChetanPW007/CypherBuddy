@@ -74,7 +74,7 @@ jobs:
           cd android
           sed -i 's/\r$//' gradlew
           chmod +x gradlew
-          ./gradlew assembleRelease -x lint -x test -x checkReleaseAarMetadata --no-daemon --stacktrace
+          ./gradlew assembleRelease -x lint -x test -x checkReleaseAarMetadata --no-daemon --stacktrace || (echo "=== GRADLE RELEASE FAILURE LOG ==="; ./gradlew assembleRelease -x lint -x test -x checkReleaseAarMetadata --no-daemon --info; exit 1)
 
       - name: Show signing fingerprint for assetlinks.json
         if: steps.keystore.outputs.available == 'true'

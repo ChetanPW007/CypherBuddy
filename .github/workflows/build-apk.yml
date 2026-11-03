@@ -54,13 +54,41 @@ jobs:
         id: keystore
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | tr -cd 'A-Za-z0-9+/=' | base64 -d > "$RUNNER_TEMP/release.keystore"
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
+          KS="$RUNNER_TEMP/release.keystore"
+          valid() { [ -s "$KS" ] && keytool -list -keystore "$KS" -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; }
+
+          if [ -z "$KEYSTORE_B64" ]; then
             echo "available=false" >> "$GITHUB_OUTPUT"
             echo "::warning::ANDROID_KEYSTORE_BASE64 secret not set - building a debug APK (not suitable for App Links verification)."
+            exit 0
+          fi
+
+          # Attempt 1: normal base64 (ignore stray whitespace/newlines)
+          printf '%s' "$KEYSTORE_B64" | tr -cd 'A-Za-z0-9+/=' | base64 -d > "$KS" 2>/dev/null || true
+          # Attempt 2: secret was base64-encoded twice
+          if ! valid; then
+            tr -cd 'A-Za-z0-9+/=' < "$KS" | base64 -d > "$KS.2" 2>/dev/null || true
+            [ -s "$KS.2" ] && mv "$KS.2" "$KS"
+          fi
+
+          if valid; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "Keystore OK:"
+            keytool -list -keystore "$KS" -storepass "$KEYSTORE_PASSWORD" 2>&1 | grep -E "Keystore type|Your keystore contains|^[^,]+, .*(PrivateKeyEntry|trustedCertEntry)" || true
+            if ! keytool -list -keystore "$KS" -storepass "$KEYSTORE_PASSWORD" 2>/dev/null | grep -qi "^$KEY_ALIAS,"; then
+              echo "::warning::Keystore opened, but ANDROID_KEY_ALIAS '$KEY_ALIAS' was not found in it. Aliases present:"
+              keytool -list -keystore "$KS" -storepass "$KEYSTORE_PASSWORD" 2>/dev/null | grep -E "PrivateKeyEntry|trustedCertEntry" | cut -d, -f1
+            fi
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Secret length (chars): ${#KEYSTORE_B64}"
+            echo "Decoded file size (bytes): $(stat -c%s "$KS" 2>/dev/null || echo 0)"
+            echo "First bytes (hex): $(head -c 4 "$KS" 2>/dev/null | xxd -p)  (expect feedfeed for JKS, or 3082... for PKCS12)"
+            keytool -list -keystore "$KS" -storepass "$KEYSTORE_PASSWORD" 2>&1 | head -3 | sed "s/$KEYSTORE_PASSWORD/***/g" || true
+            echo "::error::Release keystore is invalid (corrupt/truncated ANDROID_KEYSTORE_BASE64, or wrong ANDROID_KEYSTORE_PASSWORD). Building an UNSIGNED-for-release debug APK instead. Re-create the secret: base64 -w0 your.keystore"
           fi
 
       - name: Build signed release APK

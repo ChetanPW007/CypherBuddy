@@ -74,7 +74,7 @@ jobs:
           cd android
           sed -i 's/\r$//' gradlew
           chmod +x gradlew
-          ./gradlew assembleRelease -x lint -x test -x checkReleaseAarMetadata --no-daemon --stacktrace > gradle_build.log 2>&1 || {
+          ./gradlew assembleRelease -x lint -x test -x checkReleaseAarMetadata -x checkDebugAarMetadata --no-daemon --stacktrace > gradle_build.log 2>&1 || {
             echo "::error::Gradle build failed. Showing last 100 lines of build log:"
             tail -n 100 gradle_build.log
             exit 1

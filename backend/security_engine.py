@@ -4,24 +4,47 @@
 import re
 import os
 import io
+import time
 import socket
 import ipaddress
+import unicodedata
 import urllib.parse
+import urllib.request
+import urllib.error
 import hashlib
 import zipfile
 import json
 from typing import Dict, Any, List, Tuple, Optional
 
-# Blocked Private / Internal IP Ranges (SSRF Protection)
-PRIVATE_IP_NETWORKS = [
-    ipaddress.ip_network('127.0.0.0/8'),
-    ipaddress.ip_network('10.0.0.0/8'),
-    ipaddress.ip_network('172.16.0.0/12'),
-    ipaddress.ip_network('192.168.0.0/16'),
-    ipaddress.ip_network('169.254.169.254/32'), # AWS / GCP Metadata Endpoint
-    ipaddress.ip_network('0.0.0.0/8'),
-    ipaddress.ip_network('::1/128'),
-]
+# ---------------------------------------------------------------------------
+# Shared threat-intelligence data (single source of truth).
+# The same JSON file drives the on-device engine in src/services/urlEngine.js,
+# so the app and the backend always reach the same verdict.
+# ---------------------------------------------------------------------------
+_INTEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "shared", "url_intel.json")
+with open(_INTEL_PATH, "r", encoding="utf-8") as _fh:
+    INTEL: Dict[str, Any] = json.load(_fh)
+
+DANGEROUS_THRESHOLD: int = INTEL["thresholds"]["dangerous"]
+SUSPICIOUS_THRESHOLD: int = INTEL["thresholds"]["suspicious"]
+
+_MULTI_SUFFIXES = set(INTEL["multiPartSuffixes"])
+_SHARED_HOSTING = set(INTEL["sharedHosting"])
+_USER_CONTENT_HOSTS = tuple(INTEL["userContentHosts"])
+SHORTENERS = set(INTEL["shorteners"])
+_BRANDS: List[str] = INTEL["brands"]
+_SUFFIX_WORDS = set(INTEL["brandSuffixWords"])
+_PREFIX_WORDS = set(INTEL["brandPrefixWords"])
+_OFFICIAL: Dict[str, set] = {b: set(d) for b, d in INTEL["officialDomains"].items()}
+_OFFICIAL_ALL = set().union(*_OFFICIAL.values())
+_KNOWN_GOOD = set(INTEL["knownGood"]) | _OFFICIAL_ALL
+_TRUSTED_SUFFIXES = tuple(INTEL["trustedSuffixes"])
+_HIGH_TLDS = set(INTEL["highRiskTlds"])
+_MOD_TLDS = set(INTEL["moderateRiskTlds"])
+_SCAM_TOKENS = set(INTEL["scamTokens"])
+_PATH_KEYWORDS = INTEL["pathKeywords"]
+_TYPO_PATTERNS = INTEL["typosquatPatterns"]
+_CONFUSABLES = INTEL["confusables"]
 
 # Magic Byte Signatures for File Type Validation
 MAGIC_BYTES = {
@@ -33,51 +56,33 @@ MAGIC_BYTES = {
     'exe': b'MZ'
 }
 
-SUSPICIOUS_KEYWORDS = [
-    'verify', 'secure', 'login', 'bank', 'update', 'account', 'kyc',
-    'reward', 'gift', 'claim', 'free', 'support-desk', 'urgent', 'blocked',
-    'wallet', 'reclaim', 'airdrop', 'crypto-bonus', 'security-alert'
-]
+_BLOCKED_PSEUDO_SCHEMES = re.compile(r"^(javascript|data|vbscript|file|intent|blob|mailto|tel|sms|market):", re.I)
+_BROWSER_UA = (
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0 Mobile Safari/537.36"
+)
 
-DANGEROUS_TLDS = [
-    '.xyz', '.top', '.click', '.gq', '.cf', '.work', '.download', 
-    '.site', '.online', '.info', '.biz', '.live', '.buzz', '.rest', 
-    '.monster', '.cyou', '.tk', '.ml', '.ga', '.cc'
-]
 
-# Comprehensive Brand Protection List (35+ high-value phishing targets)
-KNOWN_BRANDS = [
-    'paypal', 'amazon', 'google', 'facebook', 'hdfc', 'sbi', 'icici', 'axis',
-    'apple', 'netflix', 'whatsapp', 'microsoft', 'chase', 'wellsfargo', 
-    'bankofamerica', 'citibank', 'barclays', 'hsbc', 'instagram', 'telegram',
-    'twitter', 'tiktok', 'discord', 'steam', 'binance', 'coinbase', 
-    'metamask', 'trustwallet', 'kraken', 'dhl', 'fedex', 'ups', 'usps', 'indiapost'
-]
+# ---------------------------------------------------------------------------
+# SSRF guard
+# ---------------------------------------------------------------------------
+def _ip_is_internal(ip_obj) -> bool:
+    mapped = getattr(ip_obj, "ipv4_mapped", None)
+    if mapped is not None:
+        ip_obj = mapped
+    return (
+        ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or
+        ip_obj.is_multicast or ip_obj.is_reserved or ip_obj.is_unspecified
+    )
 
-# Common typosquatting/leet-speak patterns for brand impersonation detection
-TYPOSQUAT_PATTERNS = [
-    ('paypa1', 'PAYPAL'), ('paypall', 'PAYPAL'), ('pay-pal', 'PAYPAL'), ('peypal', 'PAYPAL'),
-    ('amaz0n', 'AMAZON'), ('arnazon', 'AMAZON'), ('amazzon', 'AMAZON'), ('amz-verify', 'AMAZON'),
-    ('g00gle', 'GOOGLE'), ('gooogle', 'GOOGLE'), ('googIe', 'GOOGLE'), ('g00g1e', 'GOOGLE'),
-    ('app1e', 'APPLE'), ('appl3', 'APPLE'), ('apple-support-id', 'APPLE'),
-    ('micros0ft', 'MICROSOFT'), ('microsofl', 'MICROSOFT'), ('msft-security', 'MICROSOFT'),
-    ('netf1ix', 'NETFLIX'), ('netfiix', 'NETFLIX'), ('net-flix', 'NETFLIX'),
-    ('whatsap', 'WHATSAPP'), ('whatsaap', 'WHATSAPP'), ('watsapp', 'WHATSAPP'),
-    ('hdfc-bank', 'HDFC BANK'), ('sbi-kyc', 'SBI BANK'), ('icici-login', 'ICICI BANK'),
-    ('binanc3', 'BINANCE'), ('metamask-claim', 'METAMASK')
-]
 
-# Suspicious path keywords that amplify phishing likelihood
-SUSPICIOUS_PATH_KEYWORDS = [
-    'verify', 'login', 'secure', 'account', 'update', 'confirm', 'auth',
-    'banking', 'wallet', 'password', 'reset', 'kyc', 'otp', 'pin', 'session',
-    'signin', 'validate', 'portal', 'authenticate'
-]
-
-def is_ssrf_safe_url(url_str: str) -> Tuple[bool, str]:
+def is_ssrf_safe_url(url_str: str, resolve: bool = True) -> Tuple[bool, str]:
     """
-    SSRF Protection Guard: Ensures URL uses allowed schemes and does not target
-    internal loopback, private RFC1918 IPs, or cloud metadata endpoints.
+    SSRF Protection Guard: ensures URL uses allowed schemes and does not target
+    internal loopback, private (RFC1918/ULA) addresses, or cloud metadata endpoints.
+
+    resolve=False skips DNS (used when scoring a link we will never connect to);
+    resolve=True resolves every A/AAAA record (used before the backend fetches a hop).
     """
     try:
         parsed = urllib.parse.urlparse(url_str)
@@ -88,37 +93,37 @@ def is_ssrf_safe_url(url_str: str) -> Tuple[bool, str]:
         if not hostname:
             return False, "Invalid or missing hostname in URL."
 
-        # Reject localhost or loopback strings
-        if hostname.lower() in ('localhost', '127.0.0.1', '::1', '0.0.0.0'):
+        if hostname.lower() in ('localhost', 'localhost.localdomain', 'ip6-localhost'):
             return False, "Access to localhost or internal network interfaces is blocked."
 
-        # Check raw IP
         try:
             ip_obj = ipaddress.ip_address(hostname)
-            for net in PRIVATE_IP_NETWORKS:
-                if ip_obj in net:
-                    return False, f"Access to private/internal IP ({hostname}) is blocked."
+            if _ip_is_internal(ip_obj):
+                return False, f"Link points to a private/internal network address ({hostname})."
+            return True, "URL passed SSRF safety check."
         except ValueError:
-            # Hostname is a domain name, resolve DNS safely
+            pass
+
+        if resolve:
             try:
-                resolved_ip = socket.gethostbyname(hostname)
-                ip_obj = ipaddress.ip_address(resolved_ip)
-                for net in PRIVATE_IP_NETWORKS:
-                    if ip_obj in net:
-                        return False, f"Domain resolved to blocked internal IP ({resolved_ip})."
-            except Exception:
-                pass # DNS resolution failure will be handled gracefully
+                for info in socket.getaddrinfo(hostname, None):
+                    addr = info[4][0].split('%')[0]
+                    if _ip_is_internal(ipaddress.ip_address(addr)):
+                        return False, f"Domain resolves to a blocked internal address ({addr})."
+            except (socket.gaierror, ValueError, OSError):
+                pass  # DNS failure is handled gracefully; nothing is fetched
 
         return True, "URL passed SSRF safety check."
-    except Exception as e:
+    except Exception:
         return False, "Failed to parse target URL."
+
 
 def validate_file_magic_bytes(file_bytes: bytes, filename: str) -> Tuple[bool, str]:
     """
     Inspects raw file header bytes against expected magic signatures rather than trusting user extensions.
     """
     ext = filename.split('.')[-1].lower() if '.' in filename else ''
-    
+
     if ext in ('apk', 'zip'):
         if not file_bytes.startswith(MAGIC_BYTES['apk']):
             return False, "File header does not match valid ZIP/APK archive signature."
@@ -134,155 +139,400 @@ def validate_file_magic_bytes(file_bytes: bytes, filename: str) -> Tuple[bool, s
     elif ext == 'exe':
         if not file_bytes.startswith(MAGIC_BYTES['exe']):
             return False, "File header does not match valid Windows Executable signature."
-            
+
     return True, "Magic byte signature verified."
 
-def analyze_url_hardened(url: str) -> Dict[str, Any]:
-    """
-    Hardened URL scanner with SSRF validation, Punycode / Homograph detection,
-    direct IP host checks, brand spoofing detection, and TLD reputation scoring.
-    """
-    is_safe, ssrf_msg = is_ssrf_safe_url(url)
-    if not is_safe:
-        return {
-            "target": url,
-            "riskScore": 100,
-            "status": "DANGEROUS",
-            "findings": [
-                {
-                    "type": "DANGER",
-                    "title": "SSRF Security Threat Blocked",
-                    "desc": ssrf_msg
-                }
-            ],
-            "recommendation": "Blocked by CypherBuddy Security Gateway."
-        }
 
-    clean_url = url.strip()
-    if not clean_url.startswith(('http://', 'https://')):
-        clean_url = 'https://' + clean_url
+# ---------------------------------------------------------------------------
+# Domain helpers
+# ---------------------------------------------------------------------------
+def status_for(score: int) -> str:
+    return "DANGEROUS" if score >= DANGEROUS_THRESHOLD else ("SUSPICIOUS" if score >= SUSPICIOUS_THRESHOLD else "SAFE")
 
-    risk_score = 10
-    findings = []
-    
-    parsed = urllib.parse.urlparse(clean_url)
-    hostname = (parsed.hostname or '').lower()
-    path_and_query = (parsed.path + ' ' + parsed.query).lower()
 
-    # 1. SSL / HTTPS Encryption Check
-    is_https = clean_url.startswith('https://')
-    if not is_https:
-        risk_score += 25
-        findings.append({
-            "type": "WARNING",
-            "title": "Unencrypted HTTP Protocol",
-            "desc": "Data sent to this site is unencrypted and open to interception."
-        })
-    else:
-        findings.append({
-            "type": "SAFE",
-            "title": "HTTPS Encryption",
-            "desc": "Valid SSL/TLS connection established."
-        })
+def registrable_domain(host: str) -> str:
+    """eTLD+1 using a compact suffix table (no network, no extra dependency)."""
+    labels = [l for l in host.split('.') if l]
+    if len(labels) <= 2:
+        return '.'.join(labels)
+    last2 = '.'.join(labels[-2:])
+    if last2 in _MULTI_SUFFIXES or last2 in _SHARED_HOSTING:
+        return '.'.join(labels[-3:])
+    return last2
 
-    # 2. Direct IP Address Hostname Detection (Phishing indicator)
+
+def _is_user_content_host(host: str) -> bool:
+    return any(host == h or host.endswith('.' + h) for h in _USER_CONTENT_HOSTS)
+
+
+def _decode_idna(host: str) -> str:
     try:
-        ipaddress.ip_address(hostname)
-        risk_score += 45
-        findings.append({
-            "type": "DANGER",
-            "title": "Direct IP Address Hostname",
-            "desc": f"Site uses raw IP address ({hostname}) instead of a registered domain. Frequently used in evasive phishing and malware C2 servers."
-        })
+        return host.encode('ascii').decode('idna') if 'xn--' in host else host
+    except Exception:
+        return host
+
+
+def _skeleton(host: str) -> str:
+    """Lower-case ASCII look-alike skeleton of a (possibly Unicode / punycode) host."""
+    s = unicodedata.normalize('NFKC', _decode_idna(host)).lower()
+    s = ''.join(c for c in unicodedata.normalize('NFKD', s) if not unicodedata.combining(c))
+    return ''.join(_CONFUSABLES.get(c, c) for c in s)
+
+
+def _leet_variants(host: str) -> List[str]:
+    if not re.search(r"[0-9@$]|rn|vv", host):
+        return []
+    base = host.replace('@', 'a').replace('$', 's')
+    out = []
+    for one in ('l', 'i'):
+        v = base.replace('0', 'o').replace('1', one).replace('3', 'e').replace('4', 'a').replace('5', 's').replace('7', 't')
+        v = v.replace('rn', 'm').replace('vv', 'w')
+        if v != host and v not in out:
+            out.append(v)
+    return out
+
+
+def _brand_hits(text: str) -> List[str]:
+    """Brand tokens present in text. Short brands need whole-token (or brand+known-affix) matches
+    so 'groups' never matches 'ups' and 'steampowered' never matches 'steam' by accident."""
+    text = text.lower()
+    tokens = [t for t in re.split(r"[.\-_/]+", text) if t]
+    hits = []
+    for brand in _BRANDS:
+        hit = False
+        if len(brand) >= 6 and brand in text:
+            hit = True
+        else:
+            for tok in tokens:
+                if tok == brand or \
+                   (tok.startswith(brand) and tok[len(brand):] in _SUFFIX_WORDS) or \
+                   (tok.endswith(brand) and tok[:-len(brand)] in _PREFIX_WORDS):
+                    hit = True
+                    break
+        if hit:
+            hits.append(brand)
+    return hits
+
+
+def _is_official_for(brand: str, reg: str) -> bool:
+    return reg in _OFFICIAL.get(brand, set()) or reg in _OFFICIAL_ALL
+
+
+def _is_obfuscated_numeric_host(host: str) -> bool:
+    return bool(re.fullmatch(r"(0x[0-9a-f]+|\d{8,10})", host) or re.fullmatch(r"(0x[0-9a-f]+\.){1,3}0x[0-9a-f]+", host))
+
+
+def _norm_input(url: str) -> Tuple[str, Optional[str]]:
+    """Returns (clean_url, blocked_reason). Adds https:// to scheme-less input."""
+    clean = url.strip()
+    if _BLOCKED_PSEUDO_SCHEMES.match(clean):
+        return clean, "Blocked invalid URI scheme. Only http/https supported."
+    if '://' not in clean:
+        clean = 'https://' + clean
+    return clean, None
+
+
+# ---------------------------------------------------------------------------
+# Short-link expansion (backend only; the app calls the API for these)
+# ---------------------------------------------------------------------------
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def expand_short_url(url: str, max_hops: int = 4, total_timeout: float = 5.0) -> Tuple[str, List[str], bool]:
+    """
+    Follows redirects manually, ONLY while the current hop is a known shortener, and checks every
+    hop with the SSRF guard first. The final non-shortener destination is never contacted.
+    Returns (final_url, chain, resolved).
+    """
+    chain = [url]
+    current = url
+    deadline = time.monotonic() + total_timeout
+    opener = urllib.request.build_opener(_NoRedirect)
+
+    for _ in range(max_hops):
+        host = (urllib.parse.urlparse(current).hostname or '').lower()
+        if host not in SHORTENERS:
+            return current, chain, True
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return current, chain, False
+        ok, _msg = is_ssrf_safe_url(current, resolve=True)
+        if not ok:
+            return current, chain, False
+        req = urllib.request.Request(current, method="GET", headers={"User-Agent": _BROWSER_UA, "Range": "bytes=0-0"})
+        try:
+            resp = opener.open(req, timeout=min(3.0, remaining))
+            resp.close()
+            return current, chain, False  # shortener served a page instead of redirecting
+        except urllib.error.HTTPError as e:
+            loc = e.headers.get("Location") if e.headers else None
+            code = e.code
+            e.close()
+            if code in (301, 302, 303, 307, 308) and loc:
+                current = urllib.parse.urljoin(current, loc)
+                chain.append(current)
+                continue
+            return current, chain, False
+        except Exception:
+            return current, chain, False
+
+    host = (urllib.parse.urlparse(current).hostname or '').lower()
+    return current, chain, host not in SHORTENERS
+
+
+# ---------------------------------------------------------------------------
+# URL scoring
+# ---------------------------------------------------------------------------
+def _add(findings: List[Dict[str, str]], ftype: str, title: str, desc: str) -> None:
+    findings.append({"type": ftype, "title": title, "desc": desc})
+
+
+def _score_url(clean_url: str) -> Tuple[int, List[Dict[str, str]], Dict[str, Any]]:
+    parsed = urllib.parse.urlparse(clean_url)
+    host = (parsed.hostname or '').lower().rstrip('.')
+    path_q = (parsed.path + ' ' + parsed.query).lower()
+    is_https = parsed.scheme == 'https'
+    findings: List[Dict[str, str]] = []
+    meta: Dict[str, Any] = {"host": host}
+
+    reg = registrable_domain(host)
+    meta["registrableDomain"] = reg
+    score = 10
+
+    # 1. Transport
+    if is_https:
+        _add(findings, "SAFE", "HTTPS Encryption", "Connection to this site is encrypted (SSL/TLS).")
+    else:
+        score += 15
+        _add(findings, "WARNING", "Unencrypted HTTP Protocol", "Data sent to this site is unencrypted and open to interception.")
+
+    # 2. Deceptive user-info trick (https://paypal.com@evil.xyz)
+    if parsed.username and '.' in parsed.username:
+        score += 35
+        _add(findings, "DANGER", "Deceptive '@' in Link",
+             f"Text before the '@' ({parsed.username}) looks like a website but the real destination is {host}.")
+
+    # 3. Raw / obfuscated IP hosts
+    is_ip = False
+    try:
+        ipaddress.ip_address(host)
+        is_ip = True
     except ValueError:
         pass
+    if is_ip:
+        score += 45
+        _add(findings, "DANGER", "Direct IP Address Hostname",
+             f"Site uses a raw IP address ({host}) instead of a registered domain. Common in evasive phishing and malware servers.")
+    elif _is_obfuscated_numeric_host(host):
+        score += 45
+        _add(findings, "DANGER", "Obfuscated IP Address", "The hostname is a disguised numeric IP address, a classic filter-evasion trick.")
 
-    # 3. Punycode / IDN Homograph Attack Detection (e.g., xn--)
-    if hostname.startswith("xn--") or ".xn--" in hostname:
-        risk_score += 55
-        findings.append({
-            "type": "DANGER",
-            "title": "IDN Homograph / Punycode Deception (xn--)",
-            "desc": "Domain uses internationalized characters designed to visually impersonate familiar letters (e.g. Cyrillic letters spoofing Latin characters)."
-        })
+    # 4. Look-alike (homograph / punycode) domains
+    skel = _skeleton(host)
+    non_ascii = any(ord(c) > 127 for c in host)
+    is_idn = non_ascii or 'xn--' in host
+    if is_idn:
+        skel_reg = registrable_domain(skel)
+        if skel != host and skel_reg in _KNOWN_GOOD:
+            score += 65
+            _add(findings, "DANGER", "IDN Homograph Impersonation",
+                 f"This domain uses look-alike characters to imitate {skel_reg}.")
+        else:
+            score += 35
+            _add(findings, "WARNING", "Internationalised Domain (xn--)",
+                 "Domain uses non-Latin characters that can be used to visually spoof familiar sites.")
 
-    # 4. Dangerous TLD Check
-    for tld in DANGEROUS_TLDS:
-        if hostname.endswith(tld):
-            risk_score += 30
-            findings.append({
-                "type": "DANGER",
-                "title": f"High Risk TLD ({tld})",
-                "desc": "Top-level domain extension frequently used in malware/phishing campaigns."
-            })
+    # 5. Recognised-good domains: stop early (user-content platforms are handled below)
+    user_content = _is_user_content_host(host)
+    trusted_suffix = host.endswith(_TRUSTED_SUFFIXES)
+    if not is_ip and not is_idn and not user_content and (reg in _KNOWN_GOOD or trusted_suffix):
+        label = "Official government / education / banking domain" if trusted_suffix and reg not in _KNOWN_GOOD else "Recognised domain"
+        _add(findings, "SAFE", label, f"{reg} is a well-known, legitimate website.")
+        meta["knownGood"] = True
+        return max(5, 5 + (0 if is_https else 15)), findings, meta
+
+    # 6. Trusted platform hosting user-made pages (forms, sites, shared drives)
+    if user_content:
+        score += 25
+        _add(findings, "WARNING", "User-Made Page on a Trusted Platform",
+             f"{host} is a real service, but anyone can publish a page here. The platform vouches for the domain, not for this page.")
+        for brand in _brand_hits(parsed.path + ' ' + parsed.query):
+            score += 45
+            _add(findings, "DANGER", f"Page Imitates {brand.upper()}",
+                 f"This page name references {brand} while hosted on {host}, a common phishing trick.")
             break
 
-    # 5. Typosquatting / Leet-speak Brand Impersonation
-    for typo_pattern, brand_name in TYPOSQUAT_PATTERNS:
-        if typo_pattern in hostname:
-            risk_score += 55
-            findings.append({
-                "type": "DANGER",
-                "title": f"Typosquatting / {brand_name} Impersonation Detected",
-                "desc": f"Domain uses '{typo_pattern}' — a deceptive typosquat pattern targeting {brand_name}."
-            })
-            break
+    # 7. Free / shared hosting
+    elif reg in _SHARED_HOSTING or any(host.endswith('.' + h) for h in _SHARED_HOSTING):
+        score += 10
+        _add(findings, "WARNING", "Free Hosting Subdomain", "Hosted on a free shared platform where anyone can create a site instantly.")
 
-    # 6. Standard brand name in wrong domain
-    for brand in KNOWN_BRANDS:
-        if brand in hostname:
-            is_legit = (
-                hostname == f"{brand}.com" or 
-                hostname.endswith(f".{brand}.com") or 
-                hostname == f"{brand}.org" or 
-                hostname.endswith(f".{brand}.org") or 
-                hostname == f"{brand}.net" or 
-                hostname.endswith(f".{brand}.net") or
-                hostname.endswith(f".{brand}.co.in")
-            )
-            if not is_legit:
-                risk_score += 45
-                findings.append({
-                    "type": "DANGER",
-                    "title": f"Suspected {brand.upper()} Brand Impersonation",
-                    "desc": f"Hostname contains '{brand}' but is not hosted on an official domain."
-                })
+    # 8. TLD reputation
+    tld = host.rsplit('.', 1)[-1] if '.' in host else ''
+    if tld in _HIGH_TLDS:
+        score += 30
+        _add(findings, "DANGER", f"High Risk TLD (.{tld})", "Top-level domain extension frequently used in malware/phishing campaigns.")
+    elif tld in _MOD_TLDS:
+        score += 15
+        _add(findings, "WARNING", f"Low-Reputation TLD (.{tld})", "Extension is cheap and often abused for short-lived scam sites.")
+
+    # 9. Brand impersonation (skipped for user-content hosts, handled above)
+    impersonated: Optional[str] = None
+    if not user_content and not is_ip:
+        raw_hits = [b for b in _brand_hits(host) if not _is_official_for(b, reg)]
+        typo = next(((p, b) for p, b in _TYPO_PATTERNS if p in host), None)
+        leet_hit = None
+        if not raw_hits:
+            for variant in _leet_variants(host):
+                vh = [b for b in _brand_hits(variant) if not _is_official_for(b, reg)]
+                if vh:
+                    leet_hit = vh[0]
+                    break
+        if typo or leet_hit:
+            score += 55
+            name = typo[1] if typo else leet_hit.upper()
+            impersonated = name
+            _add(findings, "DANGER", f"Typosquatting / {name} Impersonation Detected",
+                 f"Domain imitates {name} using look-alike spelling designed to deceive.")
+        elif raw_hits:
+            score += 45
+            impersonated = raw_hits[0].upper()
+            _add(findings, "DANGER", f"Suspected {impersonated} Brand Impersonation",
+                 f"Hostname contains '{raw_hits[0]}' but is not hosted on an official {raw_hits[0]} domain.")
+
+        # Official domain pasted in front of a foreign domain (paypal.com.evil.xyz)
+        for d in _OFFICIAL_ALL:
+            if (d + '.') in (host + '.') and host != d and not host.endswith('.' + d):
+                score += 30
+                _add(findings, "DANGER", "Official Domain Used as Decoy",
+                     f"'{d}' appears inside the address, but the real site is {reg}.")
                 break
 
-    # 7. Excessive Subdomain Nesting (Domain Spoofing / Cloaking)
-    subdomain_parts = hostname.split('.')
-    if len(subdomain_parts) > 4:
-        risk_score += 20
-        findings.append({
-            "type": "WARNING",
-            "title": "Deep Subdomain Nesting",
-            "desc": "Multiple nested subdomains detected, commonly used to hide the true hosting domain."
-        })
+    # 10. Bait words in the hostname
+    if not is_ip:
+        host_tokens = {t for t in re.split(r"[.\-_]+", host) if t}
+        bait = sorted(host_tokens & _SCAM_TOKENS)
+        if len(bait) >= 3:
+            score += 35
+        elif len(bait) == 2:
+            score += 25
+        elif len(bait) == 1:
+            score += 10
+        if bait:
+            _add(findings, "WARNING", "Scam Bait Words in Domain",
+                 f"Domain contains words typical of scam portals: {', '.join(bait[:4])}.")
+        if impersonated and bait:
+            score += 15
+            _add(findings, "DANGER", "Brand Name Combined With Bait Words",
+                 f"{impersonated} plus '{bait[0]}' is the classic pattern of a fake support/reward/KYC page.")
 
-    # 8. Suspicious Path/Query Keyword Boost
-    matched_keywords = [kw for kw in SUSPICIOUS_PATH_KEYWORDS if kw in path_and_query]
-    if matched_keywords:
-        boost = min(30, len(matched_keywords) * 10)
-        risk_score += boost
-        findings.append({
-            "type": "WARNING",
-            "title": f"Suspicious Path Keywords: {', '.join(matched_keywords[:3])}",
-            "desc": "URL path contains terms commonly used in credential harvesting and OTP phishing pages."
-        })
+    # 11. Subdomain nesting beyond the registrable domain
+    extra_labels = len([l for l in host.split('.') if l]) - len([l for l in reg.split('.') if l])
+    if extra_labels > 3:
+        score += 20
+        _add(findings, "WARNING", "Deep Subdomain Nesting", "Multiple nested subdomains hide the true hosting domain.")
 
-    risk_score = min(100, max(5, risk_score))
-    status = "DANGEROUS" if risk_score >= 70 else ("SUSPICIOUS" if risk_score >= 35 else "SAFE")
+    # 12. Credential-harvesting path keywords
+    matched = [kw for kw in _PATH_KEYWORDS if kw in path_q]
+    if matched:
+        score += min(30, len(matched) * 10)
+        _add(findings, "WARNING", f"Suspicious Path Keywords: {', '.join(matched[:3])}",
+             "URL path contains terms commonly used in credential harvesting and OTP phishing pages.")
 
-    return {
+    return score, findings, meta
+
+
+def _recommendation(status: str) -> str:
+    if status == "DANGEROUS":
+        return "DO NOT OPEN. Do not enter passwords, OTPs or card details. Block the sender and report this link."
+    if status == "SUSPICIOUS":
+        return "Proceed with caution. Verify the sender through another channel before opening."
+    return "No threat signals found. Safe to browse."
+
+
+def analyze_url_hardened(url: str, expand: bool = True) -> Dict[str, Any]:
+    """
+    Hardened URL scanner. Pure heuristics plus (optional) short-link expansion:
+    SSRF guard, punycode/homograph detection, brand + typosquat detection against a
+    registrable-domain allow-list, TLD reputation, bait-word and path analysis.
+    """
+    original = (url or '').strip()
+    clean_url, blocked = _norm_input(original)
+    ok, ssrf_msg = (False, blocked) if blocked else is_ssrf_safe_url(clean_url, resolve=False)
+    if not ok:
+        return {
+            "id": f"SCAN-{__import__('random').randint(100000, 999999)}",
+            "type": "URL",
+            "target": original,
+            "riskScore": 100,
+            "status": "DANGEROUS",
+            "timestamp": "Just now",
+            "findings": [{"type": "DANGER", "title": "Unsafe Link Target Blocked", "desc": ssrf_msg}],
+            "recommendation": "Blocked by CypherBuddy Security Gateway.",
+        }
+
+    host = (urllib.parse.urlparse(clean_url).hostname or '').lower().rstrip('.')
+    final_url = clean_url
+    chain: List[str] = [clean_url]
+    pre_findings: List[Dict[str, str]] = []
+    resolved = True
+
+    if host in SHORTENERS:
+        if expand:
+            final_url, chain, resolved = expand_short_url(clean_url)
+        else:
+            resolved = False
+
+        if resolved and final_url != clean_url:
+            f_scheme = urllib.parse.urlparse(final_url).scheme
+            if f_scheme not in ('http', 'https'):
+                score, findings, meta = 10, [], {"host": host}
+                score += 45
+                _add(findings, "DANGER", "Short Link Redirects to a Non-Web Target", f"The link forwards to a {f_scheme or 'unknown'}:// address.")
+            else:
+                score, findings, meta = _score_url(final_url)
+                final_host = (urllib.parse.urlparse(final_url).hostname or '')
+                pre_findings.append({
+                    "type": "INFO", "title": "Short Link Expanded",
+                    "desc": f"{host} forwards to {final_host} ({len(chain) - 1} redirect{'s' if len(chain) != 2 else ''})."
+                })
+                score = max(score, 15)
+        else:
+            findings, meta = [], {"host": host}
+            score = 10 + 25
+            _add(findings, "WARNING", "Shortened Link Hides Its Destination",
+                 f"{host} is a link shortener and CypherBuddy could not verify where this link leads.")
+            path_q = (urllib.parse.urlparse(clean_url).path).lower()
+            matched = [kw for kw in _PATH_KEYWORDS if kw in path_q]
+            if matched:
+                score += min(30, len(matched) * 10)
+                _add(findings, "WARNING", f"Suspicious Path Keywords: {', '.join(matched[:3])}",
+                     "The short link slug contains credential-harvesting terms.")
+    else:
+        score, findings, meta = _score_url(clean_url)
+
+    findings = pre_findings + findings
+    score = min(100, max(5, score))
+    status = status_for(score)
+
+    result = {
         "id": f"SCAN-{__import__('random').randint(100000, 999999)}",
         "type": "URL",
         "target": clean_url,
-        "riskScore": risk_score,
+        "domain": meta.get("host", host),
+        "registrableDomain": meta.get("registrableDomain", ""),
+        "riskScore": score,
         "status": status,
         "timestamp": "Just now",
         "findings": findings,
-        "recommendation": "Do not enter passwords or sensitive info. Block sender immediately." if status == "DANGEROUS" else ("Proceed with caution and verify the site." if status == "SUSPICIOUS" else "Safe to browse.")
+        "recommendation": _recommendation(status),
     }
+    if final_url != clean_url:
+        result["finalUrl"] = final_url
+        result["redirectChain"] = chain
+    return result
 
 def inspect_apk_archive(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     """

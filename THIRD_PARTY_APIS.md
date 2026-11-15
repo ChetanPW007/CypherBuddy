@@ -4,7 +4,16 @@ CypherBuddy is designed to operate primarily with **free, open-source technologi
 
 ---
 
-## 1. Open-Source Engine Integrations
+## 0. What is implemented today
+
+The URL / link engine (`backend/security_engine.py` and the identical on-device port `src/services/urlEngine.js`)
+is **heuristic only**: registrable-domain brand matching, typosquat / homograph detection, TLD reputation,
+scam-word and path analysis, and safe short-link expansion. It calls **no third-party service**. Both engines read the
+same data file, `shared/url_intel.json`, and are checked against `shared/url_test_corpus.json`.
+
+The tools listed in section 1 are the **planned / optional integrations**; they are not wired into the code yet.
+
+## 1. Open-Source Engine Integrations (planned / optional)
 
 - **MobSF (Mobile Security Framework)**: Used for isolated Android APK static/dynamic analysis.
 - **YARA Rules Engine**: Used for pattern matching malware signatures against uploaded binaries.

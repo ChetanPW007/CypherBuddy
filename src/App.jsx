@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import SecurityGatewayBanner from './components/SecurityGatewayBanner';
@@ -22,6 +22,8 @@ import AutoUpdateModal from './components/AutoUpdateModal';
 
 import { API_BASE_URL, safeApiCall } from './config/apiConfig';
 import { bindDeviceToAccount } from './utils/deviceInfo';
+import { extractUrl } from './services/linkGate';
+import { CapApp } from './services/nativeBridge';
 import './styles/glassmorphism.css';
 
 const INITIAL_HISTORY = [
@@ -104,6 +106,7 @@ export default function App() {
   
   const lastProcessedUrl = useRef('');
   const lastProcessedTime = useRef(0);
+  const activeUrlRef = useRef(null);
 
   const [history, setHistory] = useState(INITIAL_HISTORY);
   const [familyAlerts, setFamilyAlerts] = useState(INITIAL_FAMILY_ALERTS);
@@ -169,37 +172,38 @@ export default function App() {
 
   // Restore persistent session / incoming share intents
   useEffect(() => {
-    // Listen for Android Native DeepLink / App URL Open Intents from WhatsApp, Messenger, Gmail
+    // Android: links tapped/shared from WhatsApp, Messenger, Gmail, SMS arrive as URL-open intents.
+    let removeListener = null;
+    let disposed = false;
+
+    const handleIncomingUrl = (rawUrl) => {
+      const url = extractUrl(rawUrl);
+      if (!url) return;
+      const now = Date.now();
+      // The same intent can be delivered twice on cold start (launch URL + appUrlOpen). Ignore that echo, and
+      // ignore the link that is already being checked - but let a deliberate re-tap a moment later through.
+      if (url === activeUrlRef.current) return;
+      if (url === lastProcessedUrl.current && now - lastProcessedTime.current < 1500) return;
+      lastProcessedUrl.current = url;
+      lastProcessedTime.current = now;
+      setTargetSharedUrl(url);
+    };
+
     try {
-      import('@capacitor/app').then(({ App: CapApp }) => {
-        const handleIncomingUrl = (rawUrl) => {
-          if (!rawUrl) return;
-          let extractedUrl = rawUrl;
-          if (extractedUrl.includes('http://') || extractedUrl.includes('https://')) {
-            const match = extractedUrl.match(/(https?:\/\/[^\s]+)/);
-            if (match) extractedUrl = match[0];
+      // Warm start: link tapped while the app is already running
+      CapApp.addListener('appUrlOpen', (event) => handleIncomingUrl(event && event.url))
+        .then((handle) => {
+          if (disposed) handle.remove();
+          else removeListener = () => handle.remove();
+        })
+        .catch(() => {}); // plain browser (npm run dev): no native bridge
 
-            const now = Date.now();
-            if (extractedUrl === lastProcessedUrl.current && (now - lastProcessedTime.current < 12000)) {
-              return; // Prevent duplicate loop triggers
-            }
-
-            lastProcessedUrl.current = extractedUrl;
-            lastProcessedTime.current = now;
-            setTargetSharedUrl(extractedUrl);
-          }
-        };
-
-        // Warm start: link tapped / shared while the app is already running
-        CapApp.addListener('appUrlOpen', (event) => handleIncomingUrl(event && event.url));
-
-        // Cold start: the app was launched by the link itself (the event may fire before JS is ready)
-        CapApp.getLaunchUrl()
-          .then((launch) => handleIncomingUrl(launch && launch.url))
-          .catch(() => {});
-      }).catch((e) => console.log('Capacitor listener fallback on web:', e));
+      // Cold start: the app was launched by the link itself
+      CapApp.getLaunchUrl()
+        .then((launch) => handleIncomingUrl(launch && launch.url))
+        .catch(() => {});
     } catch (e) {
-      console.warn('Native intent listener init:', e);
+      console.warn('Native intent listener unavailable:', e);
     }
 
     // Check stored user session
@@ -210,6 +214,29 @@ export default function App() {
         fetchUserReports();
       }, 0);
     }
+
+    return () => {
+      disposed = true;
+      if (removeListener) removeListener();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    activeUrlRef.current = targetSharedUrl;
+  }, [targetSharedUrl]);
+
+  // Stable identities: LinkProtectionOverlay must not see new function objects on every App render.
+  const closeLinkOverlay = useCallback(() => setTargetSharedUrl(null), []);
+
+  const recordGatewayResult = useCallback((result) => {
+    setHistory((prev) => (prev.some((h) => h.id === result.id) ? prev : [result, ...prev]));
+  }, []);
+
+  const viewGatewayReport = useCallback((item) => {
+    setCurrentScanResult(item);
+    setTargetSharedUrl(null);
+    setActiveTab('result');
   }, []);
 
   // Handle Onboarding finish
@@ -277,12 +304,9 @@ export default function App() {
       {targetSharedUrl && (
         <LinkProtectionOverlay 
           targetUrl={targetSharedUrl}
-          onClose={() => setTargetSharedUrl(null)}
-          onViewReport={(item) => {
-            setCurrentScanResult(item);
-            setTargetSharedUrl(null);
-            setActiveTab('result');
-          }}
+          onClose={closeLinkOverlay}
+          onResult={recordGatewayResult}
+          onViewReport={viewGatewayReport}
         />
       )}
 

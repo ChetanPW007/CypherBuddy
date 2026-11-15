@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import GlassCard from '../components/GlassCard';
 import RiskGauge from '../components/RiskGauge';
 import IsolatedSandboxModal from '../components/IsolatedSandboxModal';
+import ReportThreatSheet from '../components/ReportThreatSheet';
 import { exportReportToPDF } from '../services/pdfService';
 import { 
   ShieldCheck, 
@@ -12,12 +13,14 @@ import {
   Eye, 
   ChevronDown, 
   ChevronUp, 
-  Terminal
+  Terminal,
+  Flag
 } from 'lucide-react';
 
 export default function SecurityResultScreen({ result, onBack, onSendFamilyAlert }) {
   const [showSandbox, setShowSandbox] = useState(false);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+  const [showReport, setShowReport] = useState(false);
 
   if (!result) return null;
 
@@ -53,6 +56,17 @@ export default function SecurityResultScreen({ result, onBack, onSendFamilyAlert
           )}
         </div>
       </div>
+
+      {(isDangerous || isSuspicious) && (
+        <button
+          onClick={() => setShowReport(true)}
+          className="btn-primary"
+          style={{ width: '100%', padding: '13px', fontSize: '0.92rem', background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+        >
+          <Flag size={17} /> Report to Cyber Crime (cybercrime.gov.in / 1930)
+        </button>
+      )}
+      {showReport && <ReportThreatSheet result={result} onClose={() => setShowReport(false)} />}
 
       {/* Main Risk Gauge Header */}
       <GlassCard style={{ textAlign: 'center', padding: '24px 16px' }}>

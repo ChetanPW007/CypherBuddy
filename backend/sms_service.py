@@ -40,7 +40,7 @@ def mask_contact(contact: str) -> str:
         masked_name = name[0] + "***" + (name[-1] if len(name) > 1 else "")
         return f"{masked_name}@{domain}"
     else:
-        # Phone masking: e.g. +917349107584 -> +91 ******7584
+        # Phone masking: e.g. +919876543210 -> +91 ******3210
         if len(contact) >= 10:
             return contact[:3] + " ****** " + contact[-4:]
         return "******" + contact[-2:] if len(contact) >= 2 else "******"

@@ -20,6 +20,10 @@ from starlette.testclient import TestClient
 
 # Ensure development mode is active for test OTP verification
 os.environ["ALLOW_DEV_OTP"] = "true"
+# Accounts are no longer seeded from credentials hard-coded in the repo: opt in explicitly for the test run.
+os.environ.setdefault("ADMIN_EMAIL", "admin@cypherbuddy.org")
+os.environ.setdefault("ADMIN_PASSWORD", "AdminPass123!")
+os.environ.setdefault("SEED_DEMO_USER", "true")
 
 try:
     from backend.main import app
@@ -162,6 +166,30 @@ log_test("Direct IP address hostname flagged", data.get("riskScore", 0) >= 50)
 r = client.post("/api/scan/url", json={"url": "https://support.google.com/android"}, headers=user_headers)
 data = r.json()
 log_test("Legitimate site detected as SAFE", data.get("status") == "SAFE" and data.get("riskScore", 0) < 35)
+
+
+# 4.5 Link-gateway endpoint (unauthenticated, used by the app before opening a tapped link)
+r = client.post("/api/security/analyze-url", json={"url": "https://www.amazon.in/dp/B0CX23V2ZK"})
+d = r.json()
+log_test("Gateway allows a legitimate Indian retail site", r.status_code == 200 and d.get("recommended_action") == "allow")
+
+r = client.post("/api/security/analyze-url", json={"url": "http://paypa1-account-security-update.xyz/login.php"})
+d = r.json()
+log_test("Gateway blocks phishing and agrees with the engine status",
+         d.get("recommended_action") == "block" and d.get("analysis_details", {}).get("status") == "DANGEROUS")
+
+r = client.post("/api/security/analyze-url", json={"url": "x"})
+log_test("Gateway rejects an empty/too-short URL (422)", r.status_code == 422)
+
+# 4.6 Threat report -> reference ID + official portal
+r = client.post("/api/report/threat", json={
+    "url": "http://paypa1-account-security-update.xyz/login.php",
+    "risk_score": 100,
+    "reasons": ["Typosquatting / PAYPAL Impersonation Detected"]
+})
+d = r.json()
+log_test("Threat report returns reference ID and national portal",
+         r.status_code == 200 and d.get("referenceId", "").startswith("CB-RPT-") and "cybercrime.gov.in" in d.get("portalUrl", ""))
 
 
 # ============================================================

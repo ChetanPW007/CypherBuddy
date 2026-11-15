@@ -105,13 +105,13 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding: _onBackToLa
       // Check if backend detected an ADMIN account requiring 2-Step OTP
       if (data.status === 'otp_required') {
         setMaskedContact(data.targetMasked || loginContact);
-        const codeMsg = data.devOtp 
-          ? `Official Admin verified! Your 6-digit OTP code is: ${data.devOtp} (or 123456)`
-          : 'Official Admin credentials verified! 6-digit OTP sent to your contact. (Dev OTP: 123456)';
+        const codeMsg = data.devOtp
+          ? `Official Admin verified! Development OTP: ${data.devOtp}`
+          : 'Official Admin credentials verified! A 6-digit OTP has been sent to your contact.';
         setSuccessMsg(codeMsg);
         setStep(2);
         setCooldown(60);
-        setOtp(data.devOtp || '123456');
+        setOtp(data.devOtp || '');
         return;
       }
 
@@ -157,27 +157,6 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding: _onBackToLa
       });
 
       if (!res.ok) {
-        // Universal demo/dev fallback: If master OTP 123456 was entered, authenticate immediately
-        if (otp.trim() === '123456') {
-          const fallbackToken = 'cb_admin_dev_token_' + Date.now();
-          localStorage.setItem('cypherbuddy_token', fallbackToken);
-          setSuccessMsg('🎉 2-Step OTP Authentication successful! Opening Admin Dashboard...');
-          setTimeout(() => {
-            onAuthSuccess({
-              accessToken: fallbackToken,
-              refreshToken: fallbackToken,
-              role: 'ADMIN',
-              user: {
-                id: 'ADM-001',
-                name: 'Official CypherBuddy Admin',
-                email: loginContact.includes('@') ? loginContact.trim() : 'admin@cypherbuddy.org',
-                phone: !loginContact.includes('@') ? loginContact.trim() : '+917349107584',
-                role: 'ADMIN'
-              }
-            });
-          }, 350);
-          return;
-        }
         throw new Error(res.error || 'Invalid or expired OTP code.');
       }
 
@@ -197,33 +176,13 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding: _onBackToLa
             id: 'ADM-001',
             name: 'Official CypherBuddy Admin',
             email: 'admin@cypherbuddy.org',
-            phone: '+917349107584',
+            phone: '',
             role: 'ADMIN'
           }
         });
       }, 500);
 
     } catch (err) {
-      if (otp.trim() === '123456') {
-        const fallbackToken = 'cb_admin_dev_token_' + Date.now();
-        localStorage.setItem('cypherbuddy_token', fallbackToken);
-        setSuccessMsg('🎉 2-Step OTP Authentication successful! Opening Admin Dashboard...');
-        setTimeout(() => {
-          onAuthSuccess({
-            accessToken: fallbackToken,
-            refreshToken: fallbackToken,
-            role: 'ADMIN',
-            user: {
-              id: 'ADM-001',
-              name: 'Official CypherBuddy Admin',
-              email: loginContact.includes('@') ? loginContact.trim() : 'admin@cypherbuddy.org',
-              phone: !loginContact.includes('@') ? loginContact.trim() : '+917349107584',
-              role: 'ADMIN'
-            }
-          });
-        }, 350);
-        return;
-      }
       setError(err.message || 'Invalid or expired OTP.');
     } finally {
       setLoading(false);
@@ -595,35 +554,6 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding: _onBackToLa
             </div>
 
             {/* Quick Demo OTP Helper Badge */}
-            <div style={{
-              background: 'rgba(56, 189, 248, 0.08)',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
-              borderRadius: '10px',
-              padding: '10px 14px',
-              fontSize: '0.82rem',
-              color: 'var(--brand-cyan)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <span>💡 Master OTP: <strong>123456</strong></span>
-              <button
-                type="button"
-                onClick={() => setOtp('123456')}
-                style={{
-                  background: 'rgba(56, 189, 248, 0.2)',
-                  border: 'none',
-                  color: 'var(--text-main)',
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                Auto-fill 123456
-              </button>
-            </div>
 
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '6px', textAlign: 'center' }}>

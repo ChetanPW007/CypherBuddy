@@ -13,6 +13,7 @@ import {
   Upload
 } from 'lucide-react';
 import ArchitectureGatewayDocModal from '../components/ArchitectureGatewayDocModal';
+import LinkGuardianCard from '../components/LinkGuardianCard';
 
 export default function PermissionsScreen({ userSettings = {}, onUpdateSettings }) {
   const [permissions, setPermissions] = useState({
@@ -64,6 +65,9 @@ export default function PermissionsScreen({ userSettings = {}, onUpdateSettings 
           <Layers size={14} /> OS Architecture
         </button>
       </div>
+
+      {/* WhatsApp link gateway: one-tap default-browser setup */}
+      <LinkGuardianCard />
 
       {/* Security Protection Mode Selection (Requirement 20) */}
       <GlassCard>

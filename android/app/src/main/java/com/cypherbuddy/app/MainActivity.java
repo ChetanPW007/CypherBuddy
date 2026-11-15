@@ -28,6 +28,8 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // Must run before super.onCreate so the bridge sees the rewritten intent.
         normalizeSendIntent(getIntent());
+        // Custom plugins must be registered before super.onCreate().
+        registerPlugin(LinkOpenerPlugin.class);
         super.onCreate(savedInstanceState);
     }
 

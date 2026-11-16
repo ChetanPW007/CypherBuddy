@@ -7,13 +7,12 @@ import { openLinkExternally, minimizeApp } from '../services/nativeBridge';
 import { copyText } from '../services/reportService';
 import { urlEngine } from '../services/urlHeuristics';
 
-// Show the "checking..." pill only if the verdict takes longer than this. Almost every link is judged
-// on-device in a few ms, so safe links open with no flicker at all.
-const PILL_DELAY_MS = 250;
+// A tiny delay before showing the scanning UI prevents a flash for instant on-device verdicts.
+const SCAN_UI_DELAY_MS = 120;
 
 export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport, onResult }) {
   const [phase, setPhase] = useState('scanning'); // scanning | verdict | openFailed
-  const [showPill, setShowPill] = useState(false);
+  const [showScanUI, setShowScanUI] = useState(false);
   const [result, setResult] = useState(null);
   const [showReport, setShowReport] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -32,8 +31,9 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
     setPhase('scanning');
     setResult(null);
     setShowReport(false);
-    setShowPill(false);
-    const pillTimer = setTimeout(() => !cancelled && setShowPill(true), PILL_DELAY_MS);
+    setShowScanUI(false);
+    // Show scanning UI after a tiny delay — fast on-device verdicts close before this fires
+    const scanUITimer = setTimeout(() => !cancelled && setShowScanUI(true), SCAN_UI_DELAY_MS);
     warmBackend();
 
     (async () => {
@@ -59,7 +59,7 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
         };
       }
       if (cancelled) return;
-      clearTimeout(pillTimer);
+      clearTimeout(scanUITimer);
 
       // Safe -> straight to Chrome. The user never sees CypherBuddy.
       if (scan.recommended_action === 'allow') {
@@ -82,7 +82,7 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
 
     return () => {
       cancelled = true;
-      clearTimeout(pillTimer);
+      clearTimeout(scanUITimer);
     };
   }, [targetUrl]);
 
@@ -117,42 +117,65 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
         position: 'fixed',
         inset: 0,
         zIndex: 99999,
-        background: scanning ? 'transparent' : 'rgba(3, 10, 26, 0.7)',
-        backdropFilter: scanning ? 'none' : 'blur(8px)',
-        WebkitBackdropFilter: scanning ? 'none' : 'blur(8px)',
-        pointerEvents: scanning ? 'none' : 'auto',
+        // Always solid background — prevents white screen on cold start
+        background: 'rgba(3, 10, 26, 0.95)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'flex-start',
+        justifyContent: scanning ? 'center' : 'flex-start',
         padding: '24px 16px',
         overflowY: 'auto',
-        animation: 'fadeIn 0.2s ease',
+        animation: 'fadeIn 0.15s ease',
       }}
     >
-      {scanning && showPill && (
+      {/* Scanning phase: centered loading card */}
+      {scanning && showScanUI && (
         <div
           style={{
-            pointerEvents: 'auto',
             width: '90%',
             maxWidth: '380px',
-            background: 'rgba(15, 23, 42, 0.96)',
-            border: '1px solid rgba(56, 189, 248, 0.6)',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(56, 189, 248, 0.3)',
-            borderRadius: '30px',
-            padding: '10px 16px',
+            background: 'rgba(15, 23, 42, 0.98)',
+            border: '1px solid rgba(56, 189, 248, 0.5)',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(56, 189, 248, 0.15)',
+            borderRadius: '20px',
+            padding: '28px 20px',
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
-            gap: '12px',
-            animation: 'slideInRight 0.3s ease',
+            gap: '16px',
+            animation: 'fadeIn 0.2s ease',
+            textAlign: 'center',
           }}
         >
-          <RefreshCw size={20} color="#38bdf8" className="spin" />
-          <div style={{ flex: 1, overflow: 'hidden' }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8' }}>CypherBuddy is checking this link...</div>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'monospace' }}>
-              {targetUrl}
+          {/* Animated shield icon */}
+          <div style={{
+            width: '64px', height: '64px', borderRadius: '50%',
+            background: 'rgba(56, 189, 248, 0.1)',
+            border: '2px solid rgba(56, 189, 248, 0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <RefreshCw size={28} color="#38bdf8" className="spin" />
+          </div>
+          <div>
+            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#f8fafc', marginBottom: '4px' }}>
+              🛡️ Checking link safety...
             </div>
+            <div style={{ fontSize: '0.78rem', color: '#64748b' }}>Powered by CypherBuddy AI</div>
+          </div>
+          <div style={{
+            background: 'rgba(0,0,0,0.3)',
+            borderRadius: '10px',
+            padding: '8px 12px',
+            width: '100%',
+            fontSize: '0.72rem',
+            color: '#94a3b8',
+            fontFamily: 'monospace',
+            wordBreak: 'break-all',
+            lineHeight: 1.4,
+          }}>
+            {targetUrl}
           </div>
         </div>
       )}

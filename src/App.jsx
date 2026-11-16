@@ -227,7 +227,22 @@ export default function App() {
   }, [targetSharedUrl]);
 
   // Stable identities: LinkProtectionOverlay must not see new function objects on every App render.
-  const closeLinkOverlay = useCallback(() => setTargetSharedUrl(null), []);
+  const closeLinkOverlay = useCallback(() => {
+    setTargetSharedUrl(null);
+    // After the overlay closes, make sure the user sees a real screen (not a blank).
+    // If the app was cold-started by the link, activeTab may still be 'landing' even though
+    // the user is logged in — navigate to home in that case.
+    const token = typeof localStorage !== 'undefined' && localStorage.getItem('cypherbuddy_token');
+    if (token) {
+      setActiveTab((prev) => {
+        if (prev === 'landing' || prev === 'onboarding') {
+          const isSetupDone = localStorage.getItem('cypherbuddy_setup_completed') === 'true';
+          return isSetupDone ? 'home' : 'setup';
+        }
+        return prev;
+      });
+    }
+  }, []);
 
   const recordGatewayResult = useCallback((result) => {
     setHistory((prev) => (prev.some((h) => h.id === result.id) ? prev : [result, ...prev]));

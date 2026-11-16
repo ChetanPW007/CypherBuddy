@@ -1,113 +1,155 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import GlassCard from './GlassCard';
-import { 
-  ShieldAlert, 
-  AlertTriangle,
-  RefreshCw,
-  FileText
-} from 'lucide-react';
-import { safeApiCall } from '../config/apiConfig';
+import ReportThreatSheet from './ReportThreatSheet';
+import { ShieldAlert, AlertTriangle, RefreshCw, FileText, Flag, Copy } from 'lucide-react';
+import { scanLink, isOwnHost, warmBackend } from '../services/linkGate';
+import { openLinkExternally, minimizeApp } from '../services/nativeBridge';
+import { copyText } from '../services/reportService';
+import { urlEngine } from '../services/urlHeuristics';
 
-import { Browser } from '@capacitor/browser';
+// Show the "checking..." pill only if the verdict takes longer than this. Almost every link is judged
+// on-device in a few ms, so safe links open with no flicker at all.
+const PILL_DELAY_MS = 250;
 
-export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport }) {
-  const [analyzing, setAnalyzing] = useState(true);
+export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport, onResult }) {
+  const [phase, setPhase] = useState('scanning'); // scanning | verdict | openFailed
+  const [showPill, setShowPill] = useState(false);
   const [result, setResult] = useState(null);
-  const [error, setError] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Parent callbacks live in refs so a re-render of <App/> (new inline function identity) can never restart the scan.
+  const onCloseRef = useRef(onClose);
+  const onResultRef = useRef(onResult);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    onResultRef.current = onResult;
+  });
 
   useEffect(() => {
-    if (!targetUrl) return;
+    if (!targetUrl) return undefined;
+    let cancelled = false;
+    setPhase('scanning');
+    setResult(null);
+    setShowReport(false);
+    setShowPill(false);
+    const pillTimer = setTimeout(() => !cancelled && setShowPill(true), PILL_DELAY_MS);
+    warmBackend();
 
-    let isMounted = true;
-
-    async function performLinkAnalysis() {
-      setAnalyzing(true);
-      setError(false);
-
-      try {
-        const response = await safeApiCall('/api/security/analyze-url', {
-          method: 'POST',
-          body: JSON.stringify({ url: targetUrl })
-        });
-
-        if (!isMounted) return;
-
-        if (response.ok && response.data) {
-          const data = response.data;
-          setResult(data);
-
-          // SAFE / LOW RISK: OPEN IN EXTERNAL CHROME VIA CAPACITOR BROWSER PLUGIN
-          if (data.recommended_action === 'allow' || data.risk_level === 'low') {
-            try {
-              await Browser.open({ url: targetUrl });
-            } catch {
-              const opened = window.open(targetUrl, '_system');
-              if (!opened) window.location.href = targetUrl;
-            }
-            onClose();
-          }
-        } else {
-          setError(true);
-        }
-      } catch {
-        if (isMounted) setError(true);
-      } finally {
-        if (isMounted) setAnalyzing(false);
+    (async () => {
+      // Our own links are handled by the app itself.
+      if (isOwnHost(targetUrl)) {
+        onCloseRef.current();
+        return;
       }
-    }
 
-    performLinkAnalysis();
+      let scan;
+      try {
+        scan = await scanLink(targetUrl);
+      } catch (e) {
+        console.warn('Link scan failed, using on-device verdict:', e);
+        const local = urlEngine.analyzeUrlLocal(targetUrl);
+        scan = {
+          ...local,
+          url: targetUrl,
+          risk_score: local.riskScore,
+          risk_level: local.status === 'DANGEROUS' ? 'dangerous' : local.status === 'SUSPICIOUS' ? 'suspicious' : 'low',
+          recommended_action: local.status === 'DANGEROUS' ? 'block' : local.status === 'SUSPICIOUS' ? 'warn' : 'allow',
+          reasons: local.findings.filter((f) => f.type !== 'SAFE').map((f) => `${f.title}: ${f.desc}`),
+        };
+      }
+      if (cancelled) return;
+      clearTimeout(pillTimer);
+
+      // Safe -> straight to Chrome. The user never sees CypherBuddy.
+      if (scan.recommended_action === 'allow') {
+        const opened = await openLinkExternally(scan.finalUrl || targetUrl);
+        if (cancelled) return;
+        if (opened) {
+          onCloseRef.current();
+        } else {
+          setResult(scan);
+          setPhase('openFailed');
+        }
+        return;
+      }
+
+      // Suspicious / dangerous -> show the report, and record it once.
+      setResult(scan);
+      setPhase('verdict');
+      if (onResultRef.current) onResultRef.current(scan);
+    })();
 
     return () => {
-      isMounted = false;
+      cancelled = true;
+      clearTimeout(pillTimer);
     };
-  }, [targetUrl, onClose]);
+  }, [targetUrl]);
 
   if (!targetUrl) return null;
 
-  // IF SAFE LINK AND DISPATCHED TO CHROME, RENDER NOTHING
-  if (!analyzing && result && (result.risk_level === 'low' || result.recommended_action === 'allow')) {
-    return null;
-  }
+  const dismiss = () => {
+    onCloseRef.current();
+    minimizeApp(); // return to the chat the link came from
+  };
+
+  const openAnyway = async () => {
+    const opened = await openLinkExternally(result.finalUrl || targetUrl);
+    if (opened) onCloseRef.current();
+    else setPhase('openFailed');
+  };
+
+  const copyLink = async () => {
+    const ok = await copyText(targetUrl);
+    setCopied(ok);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const dangerous = result?.risk_level === 'dangerous';
+  const accent = dangerous ? '#f43f5e' : '#f59e0b';
+  const accentSoft = dangerous ? 'rgba(244, 63, 94, 0.12)' : 'rgba(245, 158, 11, 0.12)';
+  const accentLine = dangerous ? 'rgba(244, 63, 94, 0.3)' : 'rgba(245, 158, 11, 0.3)';
+  const scanning = phase === 'scanning';
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      zIndex: 99999,
-      background: analyzing ? 'transparent' : 'rgba(3, 10, 26, 0.65)',
-      backdropFilter: analyzing ? 'none' : 'blur(8px)',
-      WebkitBackdropFilter: analyzing ? 'none' : 'blur(8px)',
-      pointerEvents: analyzing ? 'none' : 'auto',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'flex-start',
-      padding: '24px 16px',
-      animation: 'fadeIn 0.2s ease'
-    }}>
-      
-      {/* INVISIBLE BACKGROUND SCANNING TOP FLOATING PILL */}
-      {analyzing && (
-        <div style={{
-          pointerEvents: 'auto',
-          width: '90%',
-          maxWidth: '380px',
-          background: 'rgba(15, 23, 42, 0.96)',
-          border: '1px solid rgba(56, 189, 248, 0.6)',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(56, 189, 248, 0.3)',
-          borderRadius: '30px',
-          padding: '10px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          animation: 'slideInRight 0.3s ease'
-        }}>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 99999,
+        background: scanning ? 'transparent' : 'rgba(3, 10, 26, 0.7)',
+        backdropFilter: scanning ? 'none' : 'blur(8px)',
+        WebkitBackdropFilter: scanning ? 'none' : 'blur(8px)',
+        pointerEvents: scanning ? 'none' : 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        padding: '24px 16px',
+        overflowY: 'auto',
+        animation: 'fadeIn 0.2s ease',
+      }}
+    >
+      {scanning && showPill && (
+        <div
+          style={{
+            pointerEvents: 'auto',
+            width: '90%',
+            maxWidth: '380px',
+            background: 'rgba(15, 23, 42, 0.96)',
+            border: '1px solid rgba(56, 189, 248, 0.6)',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(56, 189, 248, 0.3)',
+            borderRadius: '30px',
+            padding: '10px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            animation: 'slideInRight 0.3s ease',
+          }}
+        >
           <RefreshCw size={20} color="#38bdf8" className="spin" />
           <div style={{ flex: 1, overflow: 'hidden' }}>
-            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8' }}>
-              🛡️ CypherBuddy Background Security Check...
-            </div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#38bdf8' }}>CypherBuddy is checking this link...</div>
             <div style={{ fontSize: '0.72rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'monospace' }}>
               {targetUrl}
             </div>
@@ -115,131 +157,110 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
         </div>
       )}
 
-      {/* RISKY / DANGEROUS / SUSPICIOUS WARNING BANNER OVER CHAT */}
-      {!analyzing && result && (result.risk_level === 'dangerous' || result.risk_level === 'suspicious') && (
-        <GlassCard style={{
-          width: '100%',
-          maxWidth: '440px',
-          padding: '24px 20px',
-          border: result.risk_level === 'dangerous' ? '1px solid rgba(244, 63, 94, 0.7)' : '1px solid rgba(245, 158, 11, 0.7)',
-          boxShadow: result.risk_level === 'dangerous' ? '0 16px 50px rgba(244, 63, 94, 0.4)' : '0 16px 50px rgba(245, 158, 11, 0.4)',
-          animation: 'slideInRight 0.3s ease',
-          marginTop: '10px'
-        }}>
-          
+      {/* Suspicious / dangerous verdict */}
+      {phase === 'verdict' && result && (
+        <GlassCard
+          style={{
+            width: '100%',
+            maxWidth: '440px',
+            padding: '22px 18px',
+            border: `1px solid ${accent}b3`,
+            boxShadow: `0 16px 50px ${accent}66`,
+            animation: 'slideInRight 0.3s ease',
+            marginTop: '10px',
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-            {result.risk_level === 'dangerous' ? (
-              <ShieldAlert size={34} color="#f43f5e" />
-            ) : (
-              <AlertTriangle size={34} color="#f59e0b" />
-            )}
+            {dangerous ? <ShieldAlert size={34} color={accent} /> : <AlertTriangle size={34} color={accent} />}
             <div>
-              <h3 style={{
-                fontSize: '1.25rem',
-                fontWeight: 800,
-                color: result.risk_level === 'dangerous' ? '#f43f5e' : '#f59e0b',
-                margin: 0
-              }}>
-                {result.risk_level === 'dangerous' ? '🔴 DANGEROUS LINK INTERCEPTED' : '🟠 SUSPICIOUS LINK INTERCEPTED'}
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: accent, margin: 0 }}>
+                {dangerous ? 'DANGEROUS LINK BLOCKED' : 'SUSPICIOUS LINK'}
               </h3>
               <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-                Threat Risk Score: <strong>{result.risk_score}/100</strong>
+                Threat risk score: <strong>{result.risk_score}/100</strong>
               </div>
             </div>
           </div>
 
-          <div style={{
-            fontSize: '0.8rem',
-            color: '#f8fafc',
-            background: 'rgba(0,0,0,0.35)',
-            padding: '10px 12px',
-            borderRadius: '10px',
-            wordBreak: 'break-all',
-            fontFamily: 'monospace',
-            marginBottom: '14px'
-          }}>
+          <div style={{ fontSize: '0.78rem', color: '#f8fafc', background: 'rgba(0,0,0,0.35)', padding: '10px 12px', borderRadius: '10px', wordBreak: 'break-all', fontFamily: 'monospace', marginBottom: '6px' }}>
             {targetUrl}
           </div>
+          {result.finalUrl && result.finalUrl !== targetUrl && (
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: '10px', wordBreak: 'break-all' }}>
+              Short link leads to: <span style={{ fontFamily: 'monospace', color: '#f1f5f9' }}>{result.finalUrl}</span>
+            </div>
+          )}
 
-          {/* Reasons List */}
           {result.reasons && result.reasons.length > 0 && (
-            <div style={{
-              padding: '12px',
-              borderRadius: '12px',
-              background: result.risk_level === 'dangerous' ? 'rgba(244, 63, 94, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-              border: result.risk_level === 'dangerous' ? '1px solid rgba(244, 63, 94, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
-              marginBottom: '18px'
-            }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: result.risk_level === 'dangerous' ? '#f43f5e' : '#f59e0b', marginBottom: '4px' }}>
-                Detected Security Warnings:
-              </div>
-              {result.reasons.map((r, i) => (
-                <div key={i} style={{ fontSize: '0.78rem', color: '#f1f5f9', marginTop: '3px' }}>
-                  • {r}
+            <div style={{ padding: '12px', borderRadius: '12px', background: accentSoft, border: `1px solid ${accentLine}`, margin: '10px 0 16px' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: accent, marginBottom: '4px' }}>Why this was flagged:</div>
+              {result.reasons.slice(0, 5).map((r, i) => (
+                <div key={i} style={{ fontSize: '0.76rem', color: '#f1f5f9', marginTop: '4px', lineHeight: 1.4 }}>
+                  &bull; {r}
                 </div>
               ))}
             </div>
           )}
 
-          {/* Action Buttons */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <button 
-              onClick={onClose}
+            <button
+              onClick={dismiss}
               className="btn-primary"
-              style={{
-                background: result.risk_level === 'dangerous' ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'var(--suspicious-primary)',
-                padding: '14px',
-                fontSize: '0.92rem'
-              }}
+              style={{ background: dangerous ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'var(--suspicious-primary)', padding: '14px', fontSize: '0.92rem' }}
             >
-              CANCEL & BLOCK (SAFE CHOICE)
+              Don&apos;t open - back to chat
+            </button>
+
+            <button
+              onClick={() => setShowReport(true)}
+              className="btn-secondary"
+              style={{ width: '100%', padding: '12px', fontSize: '0.88rem', borderColor: 'rgba(244, 63, 94, 0.5)', color: '#fb7185', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            >
+              <Flag size={16} /> Report this link to Cyber Crime
             </button>
 
             {onViewReport && (
-              <button 
-                onClick={() => onViewReport(result.analysis_details || result)}
+              <button
+                onClick={() => onViewReport(result)}
                 className="btn-secondary"
-                style={{ width: '100%', padding: '12px', fontSize: '0.85rem', borderColor: 'rgba(56, 189, 248, 0.4)', color: '#38bdf8' }}
+                style={{ width: '100%', padding: '12px', fontSize: '0.85rem', borderColor: 'rgba(56, 189, 248, 0.4)', color: '#38bdf8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
               >
-                <FileText size={16} /> Open Full CypherBuddy Security Audit Report
+                <FileText size={16} /> View full security report
+              </button>
+            )}
+
+            {!dangerous && (
+              <button
+                onClick={openAnyway}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '0.78rem', textDecoration: 'underline', cursor: 'pointer', padding: '6px' }}
+              >
+                I understand the risk - open anyway
               </button>
             )}
           </div>
-
         </GlassCard>
       )}
 
-      {/* OFFLINE / ERROR STATE */}
-      {!analyzing && (error || !result) && (
-        <GlassCard style={{ width: '100%', maxWidth: '440px', padding: '24px 20px', marginTop: '10px' }}>
+      {/* Safe link, but no browser could be launched */}
+      {phase === 'openFailed' && (
+        <GlassCard style={{ width: '100%', maxWidth: '440px', padding: '22px 18px', marginTop: '10px' }}>
           <div style={{ textAlign: 'center' }}>
             <AlertTriangle size={36} color="#f59e0b" style={{ margin: '0 auto 10px auto' }} />
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#f59e0b', margin: '0 0 6px 0' }}>
-              Analysis Unavailable
-            </h3>
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '16px' }}>
-              CypherBuddy could not verify link security.
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f59e0b', margin: '0 0 6px 0' }}>Couldn&apos;t open a browser</h3>
+            <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: '14px' }}>
+              The link looks safe, but no other browser app could be launched. Install Chrome, or copy the link.
             </p>
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={onClose} className="btn-secondary" style={{ flex: 1, padding: '12px' }}>
-                Cancel (Safe)
-              </button>
-              <button 
-                onClick={() => {
-                  const opened = window.open(targetUrl, '_system');
-                  if (!opened) window.location.href = targetUrl;
-                  onClose();
-                }}
-                className="btn-primary" 
-                style={{ flex: 1, padding: '12px', background: '#f59e0b' }}
-              >
-                Open Anyway
+              <button onClick={dismiss} className="btn-secondary" style={{ flex: 1, padding: '12px' }}>Close</button>
+              <button onClick={copyLink} className="btn-primary" style={{ flex: 1, padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <Copy size={15} /> {copied ? 'Copied' : 'Copy link'}
               </button>
             </div>
           </div>
         </GlassCard>
       )}
 
+      {showReport && result && <ReportThreatSheet result={result} onClose={() => setShowReport(false)} />}
     </div>
   );
 }

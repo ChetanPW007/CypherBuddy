@@ -2,8 +2,10 @@
 # Hardened Authentication (Bcrypt/JWT), RBAC (USER, PARENT, ADMIN), MongoDB Database, Unified 2-Step OTP Admin Login, SSRF Protection & Rate Limiting
 
 import os
+import re
 import uuid
 import time
+import asyncio
 import logging
 import datetime
 import secrets
@@ -42,7 +44,11 @@ logging.basicConfig(
 logger = logging.getLogger("cypherbuddy.backend")
 
 # JWT Security Configuration
-JWT_SECRET = os.getenv("JWT_SECRET", "CYPHERBUDDY_SUPER_SECRET_HMAC_KEY_2026_PRODUCTION_SECURE")
+JWT_SECRET = os.getenv("JWT_SECRET", "").strip()
+if not JWT_SECRET:
+    # No public default secret: tokens signed with a known key could be forged by anyone who read the repo.
+    JWT_SECRET = secrets.token_urlsafe(64)
+    logger.warning("JWT_SECRET not set - using a random per-process secret (sessions reset on restart). Set JWT_SECRET in production.")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_EXPIRE_MINUTES", "60"))
 REFRESH_TOKEN_EXPIRE_DAYS = 7
@@ -100,36 +106,55 @@ FAILED_LOGIN_ATTEMPTS: Dict[str, List[float]] = {}
 FAMILY_MEMBERS_DB: List[Dict[str, Any]] = []
 FAMILY_ALERTS_DB: List[Dict[str, Any]] = []
 
+def _env_flag(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() in ("true", "1", "yes")
+
+
+def _build_seed_accounts():
+    """
+    Builds the accounts seeded at start-up. Nothing comes from credentials hard-coded in the repo:
+    - the admin exists only if ADMIN_PASSWORD is set in the environment;
+    - the demo user exists only if SEED_DEMO_USER=true (local demos / the test-suite).
+    """
+    admin_record = None
+    admin_pass = os.getenv("ADMIN_PASSWORD", "").strip()
+    if admin_pass:
+        admin_record = {
+            "id": "ADM-001",
+            "name": "Official CypherBuddy Admin",
+            "email": os.getenv("ADMIN_EMAIL", "admin@cypherbuddy.org").strip().lower(),
+            "phone": os.getenv("ADMIN_PHONE", "").strip(),
+            "passwordHash": hash_password(admin_pass),
+            "role": "ADMIN",
+            "termsAcceptedAt": datetime.datetime.utcnow().isoformat()
+        }
+    demo_user = None
+    if _env_flag("SEED_DEMO_USER"):
+        demo_user = {
+            "id": "USR-001",
+            "name": "Demo User",
+            "email": "user@cypherbuddy.org",
+            "passwordHash": hash_password(os.getenv("DEMO_USER_PASSWORD", "Password123!")),
+            "role": "USER",
+            "termsAcceptedAt": "2026-08-31T12:00:00Z"
+        }
+    return admin_record, demo_user
+
+
 def seed_in_memory_defaults():
-    admin_phone = os.getenv("ADMIN_PHONE", "+917349107584").strip()
-    admin_email = os.getenv("ADMIN_EMAIL", "admin@cypherbuddy.org").strip().lower()
-    admin_pass = os.getenv("ADMIN_PASSWORD", "AdminPass123!").strip()
-    
-    admin_record = {
-        "id": "ADM-001",
-        "name": "Official CypherBuddy Admin",
-        "email": admin_email,
-        "phone": admin_phone,
-        "passwordHash": hash_password(admin_pass),
-        "role": "ADMIN",
-        "termsAcceptedAt": datetime.datetime.utcnow().isoformat()
-    }
-
-    ADMIN_USERS_DB[admin_email] = admin_record
-    ADMIN_USERS_DB[admin_phone] = admin_record
-    ADMIN_USERS_DB[admin_phone.replace("+", "")] = admin_record
-    if admin_phone.startswith("+91"):
-        ADMIN_USERS_DB[admin_phone.replace("+91", "")] = admin_record
-
-    demo_user = {
-        "id": "USR-001",
-        "name": "Demo User",
-        "email": "user@cypherbuddy.org",
-        "passwordHash": hash_password("Password123!"),
-        "role": "USER",
-        "termsAcceptedAt": "2026-08-31T12:00:00Z"
-    }
-    USERS_DB["user@cypherbuddy.org"] = demo_user
+    admin_record, demo_user = _build_seed_accounts()
+    if admin_record:
+        phone = admin_record["phone"]
+        ADMIN_USERS_DB[admin_record["email"]] = admin_record
+        if phone:
+            ADMIN_USERS_DB[phone] = admin_record
+            ADMIN_USERS_DB[phone.replace("+", "")] = admin_record
+            if phone.startswith("+91"):
+                ADMIN_USERS_DB[phone.replace("+91", "")] = admin_record
+    else:
+        logger.warning("ADMIN_PASSWORD not set - no admin account was created.")
+    if demo_user:
+        USERS_DB[demo_user["email"]] = demo_user
 
 seed_in_memory_defaults()
 
@@ -156,57 +181,28 @@ async def log_audit_event(event_type: str, user_id: str, details: str, ip_addres
 # Database & Admin Seed Startup Lifecycle Event
 @app.on_event("startup")
 async def on_startup():
-    db_connected = await init_db()
+    await init_db()
     db = await get_database()
 
-    # Prebuilt Official Admin Account Creation
-    admin_phone = os.getenv("ADMIN_PHONE", "+917349107584").strip()
-    admin_email = os.getenv("ADMIN_EMAIL", "admin@cypherbuddy.org").strip().lower()
-    admin_pass = os.getenv("ADMIN_PASSWORD", "AdminPass123!").strip()
-    
-    admin_record = {
-        "id": "ADM-001",
-        "name": "Official CypherBuddy Admin",
-        "email": admin_email,
-        "phone": admin_phone,
-        "passwordHash": hash_password(admin_pass),
-        "role": "ADMIN",
-        "termsAcceptedAt": datetime.datetime.utcnow().isoformat()
-    }
-
-    ADMIN_USERS_DB[admin_email] = admin_record
-    ADMIN_USERS_DB[admin_phone] = admin_record
-    ADMIN_USERS_DB[admin_phone.replace("+", "")] = admin_record
-    if admin_phone.startswith("+91"):
-        ADMIN_USERS_DB[admin_phone.replace("+91", "")] = admin_record
-
-
-    # Seed Default User Account
-    demo_user = {
-        "id": "USR-001",
-        "name": "Demo User",
-        "email": "user@cypherbuddy.org",
-        "passwordHash": hash_password("Password123!"),
-        "role": "USER",
-        "termsAcceptedAt": "2026-08-31T12:00:00Z"
-    }
-    USERS_DB["user@cypherbuddy.org"] = demo_user
+    seed_in_memory_defaults()
+    admin_record, demo_user = _build_seed_accounts()
 
     if db is not None:
         try:
-            await db.admin_users.delete_many({"$or": [{"email": admin_email}, {"phone": admin_phone}]})
-            await db.admin_users.insert_one(admin_record.copy())
-
-            await db.users.delete_many({"$or": [{"email": admin_email}, {"phone": admin_phone}, {"email": "user@cypherbuddy.org"}]})
-            await db.users.insert_one(admin_record.copy())
-            await db.users.insert_one(demo_user.copy())
-
-            logger.info("Admin and Demo User accounts seeded safely into MongoDB collections.")
+            if admin_record:
+                await db.admin_users.delete_many({"$or": [{"email": admin_record["email"]}] + ([{"phone": admin_record["phone"]}] if admin_record["phone"] else [])})
+                await db.admin_users.insert_one(admin_record.copy())
+                await db.users.delete_many({"email": admin_record["email"]})
+                await db.users.insert_one(admin_record.copy())
+            if demo_user:
+                await db.users.delete_many({"email": demo_user["email"]})
+                await db.users.insert_one(demo_user.copy())
+            logger.info("Seed accounts synchronised with MongoDB.")
         except Exception as e:
             logger.error(f"Error seeding initial accounts to MongoDB: {str(e)}")
 
-
-    logger.info(f"Official prebuilt Admin account initialized safely for {admin_email} / {mask_contact(admin_phone)}")
+    if admin_record:
+        logger.info(f"Admin account initialised for {admin_record['email']}")
 
 @app.on_event("shutdown")
 async def on_shutdown():
@@ -290,10 +286,18 @@ class TokenResponse(BaseModel):
     user: Dict[str, Any]
 
 class UrlScanRequest(BaseModel):
-    url: str
+    url: str = Field(..., min_length=3, max_length=2048)
 
 class AnalyzeUrlRequest(BaseModel):
-    url: str
+    url: str = Field(..., min_length=3, max_length=2048)
+
+class ThreatReportRequest(BaseModel):
+    url: str = Field(..., min_length=3, max_length=2048)
+    risk_score: int = Field(..., ge=0, le=100)
+    status: str = Field("DANGEROUS", max_length=20)
+    reasons: List[str] = Field(default_factory=list, max_length=20)
+    source: Optional[str] = Field("whatsapp", max_length=40)
+    note: Optional[str] = Field(None, max_length=500)
 
 class MessageScanRequest(BaseModel):
     message: str
@@ -519,8 +523,8 @@ async def login(req: LoginRequest, request: Request):
             "role": "ADMIN",
             "expiresInSeconds": 300
         }
-        if os.getenv("SMS_PROVIDER", "mock").lower() == "mock" or not os.getenv("SMS_API_KEY"):
-            res_data["devOtp"] = raw_otp
+        if _env_flag("ALLOW_DEV_OTP"):
+            res_data["devOtp"] = raw_otp  # explicit local-development opt-in only
         return res_data
 
     # STANDARD USER LOGIN
@@ -572,9 +576,8 @@ async def admin_verify_otp(req: AdminVerifyOtpRequest, request: Request):
                 otp_entry = OTP_REQUESTS_DB[qc]
                 break
 
-    # Development OTP bypass: Permitted if ALLOW_DEV_OTP is enabled or in mock SMS mode
-    is_mock_mode = os.getenv("SMS_PROVIDER", "mock").lower() == "mock" or not os.getenv("SMS_API_KEY")
-    allow_dev_otp = os.getenv("ALLOW_DEV_OTP", "true" if is_mock_mode else "false").lower() in ("true", "1", "yes")
+    # Development OTP bypass: ONLY when ALLOW_DEV_OTP=true is set explicitly (never implied by mock SMS mode)
+    allow_dev_otp = _env_flag("ALLOW_DEV_OTP")
 
     if not otp_entry:
         if allow_dev_otp and req.otp.strip() == "123456":
@@ -637,7 +640,7 @@ async def admin_verify_otp(req: AdminVerifyOtpRequest, request: Request):
             "id": "ADM-001",
             "name": "Official CypherBuddy Admin",
             "email": contact_clean if "@" in contact_clean else os.getenv("ADMIN_EMAIL", "admin@cypherbuddy.org").strip().lower(),
-            "phone": contact_clean if "@" not in contact_clean else os.getenv("ADMIN_PHONE", "+917349107584").strip(),
+            "phone": contact_clean if "@" not in contact_clean else os.getenv("ADMIN_PHONE", "").strip(),
             "role": "ADMIN"
         }
 
@@ -682,32 +685,108 @@ def get_me(user: Dict[str, Any] = Depends(get_current_user)):
 # SECURITY SCANNING, DEVICE BINDING & LINK PROTECTION ENDPOINTS
 # ----------------------------------------------------
 
+_RATE_BUCKETS: Dict[str, List[float]] = {}
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+def _rate_limited(bucket: str, key: str, limit: int, window_s: int) -> bool:
+    """Tiny in-memory sliding window. Returns True when the caller is over the limit."""
+    now = time.time()
+    k = f"{bucket}:{key}"
+    hits = [t for t in _RATE_BUCKETS.get(k, []) if now - t < window_s]
+    if len(hits) >= limit:
+        _RATE_BUCKETS[k] = hits
+        return True
+    hits.append(now)
+    _RATE_BUCKETS[k] = hits
+    if len(_RATE_BUCKETS) > 5000:  # bound memory
+        for old_key in list(_RATE_BUCKETS)[:1000]:
+            _RATE_BUCKETS.pop(old_key, None)
+    return False
+
+def _confidence(analysis: Dict[str, Any]) -> float:
+    findings = analysis.get("findings", [])
+    dangers = sum(1 for f in findings if f.get("type") == "DANGER")
+    status_ = analysis.get("status")
+    if status_ == "DANGEROUS":
+        return 0.9 if dangers >= 2 else 0.75
+    if status_ == "SUSPICIOUS":
+        return 0.6
+    return 0.95 if any(f.get("title", "").startswith("Recognised") for f in findings) else 0.7
+
 @app.post("/api/security/analyze-url")
 async def analyze_url_security(req: AnalyzeUrlRequest, request: Request):
+    """Link-gateway verdict used by the app before a tapped link is opened. Unauthenticated by design."""
+    if _rate_limited("analyze", _client_ip(request), 120, 60):
+        raise HTTPException(status_code=429, detail="Too many link checks. Please wait a moment.")
+
     url = req.url.strip()
-    analysis = analyze_url_hardened(url)
-    
-    score = analysis.get("riskScore", 10)
-    if score >= 70:
-        level = "dangerous"
-        action = "block"
-    elif score >= 30:
-        level = "suspicious"
-        action = "warn"
-    else:
-        level = "low"
-        action = "allow"
-        
-    reasons = [f["title"] + ": " + f["desc"] for f in analysis.get("findings", []) if f.get("type") != "SAFE"]
-    
+    # Short-link expansion does network I/O, so run the scan off the event loop.
+    analysis = await asyncio.to_thread(analyze_url_hardened, url)
+
+    # ONE source of truth for the verdict: the engine's own status (same thresholds everywhere).
+    level = {"DANGEROUS": "dangerous", "SUSPICIOUS": "suspicious"}.get(analysis.get("status"), "low")
+    action = {"dangerous": "block", "suspicious": "warn", "low": "allow"}[level]
+    reasons = [f["title"] + ": " + f["desc"] for f in analysis.get("findings", []) if f.get("type") in ("DANGER", "WARNING")]
+
     return {
-        "risk_score": score,
+        "risk_score": analysis.get("riskScore", 10),
         "risk_level": level,
-        "confidence": 0.95,
+        "confidence": _confidence(analysis),
         "reasons": reasons,
         "recommended_action": action,
         "url": url,
         "analysis_details": analysis
+    }
+
+NATIONAL_CYBERCRIME_PORTAL = "https://cybercrime.gov.in"
+CYBERCRIME_HELPLINE = "1930"
+THREAT_REPORTS_DB: List[Dict[str, Any]] = []
+
+@app.post("/api/report/threat")
+async def report_threat(req: ThreatReportRequest, request: Request):
+    """
+    Records a user-initiated threat report and returns a reference number plus the official
+    reporting channels. The citizen files the complaint on the national portal themselves
+    (it requires their own login/OTP), so this endpoint prepares and logs - it does not file on their behalf.
+    """
+    ip = _client_ip(request)
+    if _rate_limited("report", ip, 20, 3600):
+        raise HTTPException(status_code=429, detail="Report limit reached. Please try again later.")
+
+    safe_url = re.sub(r"[\r\n\t]+", " ", req.url.strip())[:2048]
+    reference_id = f"CB-RPT-{datetime.datetime.utcnow():%y%m%d}-{secrets.token_hex(3).upper()}"
+    record = {
+        "referenceId": reference_id,
+        "url": safe_url,
+        "riskScore": req.risk_score,
+        "status": req.status,
+        "reasons": [re.sub(r"[\r\n\t]+", " ", r)[:300] for r in req.reasons[:20]],
+        "source": req.source,
+        "note": (req.note or "")[:500],
+        "reportedAt": datetime.datetime.utcnow().isoformat() + "Z",
+    }
+    THREAT_REPORTS_DB.append(record)
+    if len(THREAT_REPORTS_DB) > 1000:
+        del THREAT_REPORTS_DB[:200]
+
+    db = await get_database()
+    if db is not None:
+        try:
+            await db.threat_reports.insert_one(record.copy())
+        except Exception as e:
+            logger.error(f"Failed writing threat report to MongoDB: {str(e)}")
+
+    await log_audit_event("THREAT_REPORTED", "anonymous", f"{reference_id} score={req.risk_score} url={safe_url[:200]}", ip)
+    return {
+        "referenceId": reference_id,
+        "portalUrl": NATIONAL_CYBERCRIME_PORTAL,
+        "helpline": CYBERCRIME_HELPLINE,
+        "message": "Report recorded. Use the reference ID when you file on the National Cyber Crime Reporting Portal."
     }
 
 @app.post("/api/device/register")
@@ -736,7 +815,7 @@ async def register_device(req: DeviceRegisterRequest, user: Dict[str, Any] = Dep
 
 @app.post("/api/scan/url")
 async def scan_url(req: UrlScanRequest, user: Dict[str, Any] = Depends(get_current_user)):
-    result = analyze_url_hardened(req.url)
+    result = await asyncio.to_thread(analyze_url_hardened, req.url)
     scan_doc = {**result, "userId": user["id"], "timestamp": datetime.datetime.utcnow().isoformat()}
     
     REPORTS_DB.append(scan_doc)

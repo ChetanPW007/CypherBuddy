@@ -1,4 +1,5 @@
 // CypherBuddy Security Analysis Engine
+import { urlEngine } from './urlHeuristics';
 // Real Heuristic Scanner, SHA-256 Hasher, Risk Evaluator, and FastAPI Backend Integration
 
 export const MOCK_EXAMPLES = {
@@ -38,122 +39,10 @@ export async function calculateFileHash(file) {
 }
 
 // 1. URL / Link Analysis Pipeline
+// Delegates to the shared on-device engine (same rules and data as the backend: shared/url_intel.json).
 export function analyzeUrl(inputUrl) {
-  let urlString = inputUrl.trim();
-  if (!urlString.startsWith('http://') && !urlString.startsWith('https://')) {
-    urlString = 'https://' + urlString;
-  }
-
-  let domain = '';
-  let isHttps = urlString.startsWith('https://');
-  let findings = [];
-  let riskScore = 10; // base score
-
-  try {
-    const parsed = new URL(urlString);
-    domain = parsed.hostname.toLowerCase();
-  } catch {
-    domain = urlString;
-  }
-
-  // Domain & Typosquatting Heuristics
-  const suspiciousKeywords = ['verify', 'secure', 'login', 'bank', 'update', 'account', 'kyc', 'reward', 'gift', 'claim', 'free', 'support-desk'];
-  const dangerousTLDs = ['.xyz', '.top', '.click', '.gq', '.cf', '.work', '.download', '.site', '.online', '.info', '.biz'];
-  const brandImpersonations = ['paypal', 'amazon', 'google', 'facebook', 'hdfc', 'sbi', 'apple', 'netflix', 'whatsapp', 'microsoft', 'instagram'];
-
-  // Check 1: Non-HTTPS on sensitive login/verify keywords
-  if (!isHttps) {
-    riskScore += 25;
-    findings.push({
-      type: 'WARNING',
-      icon: 'ShieldAlert',
-      title: 'Insecure Connection (HTTP)',
-      desc: 'This site does not use SSL/HTTPS encryption. Any passwords or personal details transmitted can be intercepted.'
-    });
-  } else {
-    findings.push({
-      type: 'SAFE',
-      icon: 'ShieldCheck',
-      title: 'Valid HTTPS Encryption',
-      desc: 'Communication with this website is encrypted via SSL/TLS.'
-    });
-  }
-
-  // Check 2: Suspicious TLD
-  if (dangerousTLDs.some(tld => domain.endsWith(tld))) {
-    riskScore += 30;
-    findings.push({
-      type: 'DANGER',
-      icon: 'Globe',
-      title: 'High-Risk Domain Extension',
-      desc: `The domain ends with ${domain.substring(domain.lastIndexOf('.'))}, an extension frequently used in bulk phishing and malware campaigns.`
-    });
-  }
-
-  // Check 3: Brand Impersonation / Hyphenated Fraud Domains
-  for (const brand of brandImpersonations) {
-    if (domain.includes(brand) && !domain.endsWith(`.${brand}.com`) && !domain.endsWith(`${brand}.com`)) {
-      riskScore += 45;
-      findings.push({
-        type: 'DANGER',
-        icon: 'AlertTriangle',
-        title: `Suspected ${brand.toUpperCase()} Brand Impersonation`,
-        desc: `This link contains "${brand}" in its domain name but is NOT an official ${brand} website.`
-      });
-    }
-  }
-
-  // Check 4: Suspicious Action Keywords in URL
-  const foundKeywords = suspiciousKeywords.filter(kw => urlString.toLowerCase().includes(kw));
-  if (foundKeywords.length >= 2) {
-    riskScore += 20;
-    findings.push({
-      type: 'WARNING',
-      icon: 'Key',
-      title: 'Credential Harvesting Keywords',
-      desc: `URL contains urgency words commonly associated with scam portals: ${foundKeywords.join(', ')}.`
-    });
-  }
-
-  // Check 5: Numerical IP Address Hostname
-  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(domain)) {
-    riskScore += 40;
-    findings.push({
-      type: 'DANGER',
-      icon: 'Server',
-      title: 'Raw IP Address Hostname',
-      desc: 'Legitimate services rarely use bare IP addresses instead of registered domain names.'
-    });
-  }
-
-  // Determine Final Risk Level
-  riskScore = Math.min(100, Math.max(5, riskScore));
-  let status = 'SAFE';
-  let title = 'This link appears safe';
-  let recommendation = 'You can browse this link safely. Keep your browser updated.';
-
-  if (riskScore >= 75) {
-    status = 'DANGEROUS';
-    title = 'High Risk Phishing / Malicious Site Detected';
-    recommendation = 'DO NOT OPEN or enter any credentials or OTPs on this site. Report and block the sender.';
-  } else if (riskScore >= 35) {
-    status = 'SUSPICIOUS';
-    title = 'Proceed with Caution';
-    recommendation = 'Verify the source before entering personal details or downloading files. Use CypherBuddy Safe Preview.';
-  }
-
-  return {
-    id: 'SCAN-' + Date.now().toString().slice(-6),
-    type: 'URL',
-    target: urlString,
-    domain,
-    riskScore,
-    status,
-    title,
-    recommendation,
-    findings,
-    timestamp: new Date().toLocaleString()
-  };
+  const result = urlEngine.analyzeUrlLocal(inputUrl);
+  return { ...result, timestamp: new Date().toLocaleString() };
 }
 
 // 2. APK / File Analysis Pipeline

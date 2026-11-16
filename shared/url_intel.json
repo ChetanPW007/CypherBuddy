@@ -1,0 +1,139 @@
+{
+  "_comment": "Single source of truth for CypherBuddy URL heuristics. Loaded by backend/security_engine.py (Python) and src/services/urlEngine.js (app, on-device). Edit here only.",
+  "thresholds": { "dangerous": 70, "suspicious": 35 },
+
+  "multiPartSuffixes": [
+    "co.in", "org.in", "net.in", "gov.in", "nic.in", "ac.in", "edu.in", "res.in", "firm.in", "gen.in", "ind.in", "bank.in",
+    "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz", "co.za", "com.br", "com.cn", "com.sg",
+    "com.my", "co.jp", "co.id", "com.pk", "com.bd", "com.np", "com.lk", "com.hk", "com.tw", "com.tr", "com.mx", "com.ar"
+  ],
+
+  "sharedHosting": [
+    "github.io", "vercel.app", "netlify.app", "pages.dev", "web.app", "firebaseapp.com", "herokuapp.com", "onrender.com",
+    "glitch.me", "workers.dev", "blogspot.com", "weebly.com", "wixsite.com", "000webhostapp.com", "godaddysites.com",
+    "webflow.io", "notion.site", "carrd.co", "canva.site", "ngrok.io", "ngrok-free.app", "trycloudflare.com",
+    "duckdns.org", "no-ip.org", "ddns.net", "surge.sh", "replit.app", "repl.co", "infinityfreeapp.com", "rf.gd"
+  ],
+
+  "userContentHosts": [
+    "docs.google.com", "forms.gle", "sites.google.com", "drive.google.com", "storage.googleapis.com",
+    "storage.cloud.google.com", "forms.office.com", "1drv.ms", "sharepoint.com", "dropbox.com", "dl.dropboxusercontent.com"
+  ],
+
+  "shorteners": [
+    "bit.ly", "tinyurl.com", "t.co", "goo.gl", "is.gd", "cutt.ly", "rb.gy", "ow.ly", "buff.ly", "shorturl.at", "t.ly",
+    "rebrand.ly", "tiny.cc", "bl.ink", "s.id", "v.gd", "lnkd.in", "tr.ee", "shrtco.de", "adf.ly", "bitly.com", "short.io",
+    "qr.ae", "clck.ru", "u.to", "soo.gd", "tny.im", "x.co", "han.gl", "2u.pw", "l.ead.me", "linktr.ee"
+  ],
+
+  "brands": [
+    "paypal", "amazon", "google", "facebook", "hdfc", "sbi", "icici", "axis", "apple", "netflix", "whatsapp", "microsoft",
+    "chase", "wellsfargo", "bankofamerica", "citibank", "barclays", "hsbc", "instagram", "telegram", "twitter", "tiktok",
+    "discord", "steam", "binance", "coinbase", "metamask", "trustwallet", "kraken", "dhl", "fedex", "ups", "usps",
+    "indiapost", "paytm", "phonepe", "flipkart", "irctc", "aadhaar", "uidai", "kotak", "pnb", "airtel", "jio"
+  ],
+  "brandSuffixWords": [
+    "bank", "id", "support", "care", "login", "secure", "kyc", "verify", "update", "pay", "card", "netbanking", "online",
+    "india", "in", "web", "app", "help", "service", "services", "customer", "official", "wallet", "pro", "mobile", "recharge"
+  ],
+  "brandPrefixWords": [
+    "my", "e", "secure", "online", "net", "update", "verify", "official", "new", "pay", "login", "mobile", "the", "get"
+  ],
+
+  "officialDomains": {
+    "paypal": ["paypal.com", "paypal.me", "paypalobjects.com"],
+    "amazon": ["amazon.com", "amazon.in", "amazon.co.uk", "amazon.de", "amazon.ca", "amazon.com.au", "amazon.jobs", "amzn.in", "amzn.to", "amzn.com", "primevideo.com", "audible.com", "a.co"],
+    "google": ["google.com", "google.co.in", "googleapis.com", "gstatic.com", "g.co", "youtube.com", "youtu.be", "gmail.com", "googleusercontent.com", "withgoogle.com", "googlevideo.com", "ggpht.com", "android.com", "chrome.com", "flutter.dev", "firebase.google.com"],
+    "facebook": ["facebook.com", "fb.com", "fb.me", "fbcdn.net", "messenger.com", "meta.com"],
+    "hdfc": ["hdfcbank.com", "hdfc.com", "hdfclife.com", "hdfcsec.com", "hdfcergo.com", "hdfcfund.com", "hdfcbank.net", "hdfc.bank.in", "hdfcsky.com"],
+    "sbi": ["sbi.co.in", "onlinesbi.sbi", "onlinesbi.com", "sbicard.com", "sbilife.co.in", "sbi.bank.in", "bank.sbi", "yonosbi.com", "sbigeneral.in", "sbimf.com", "sbi.com"],
+    "icici": ["icicibank.com", "icici.com", "icicibank.co.in", "icicidirect.com", "iciciprulife.com", "icicilombard.com", "icici.bank.in", "icicipruamc.com"],
+    "axis": ["axisbank.com", "axisbank.co.in", "axismf.com", "axis.bank.in", "axisdirect.in", "maxlifeinsurance.com"],
+    "apple": ["apple.com", "icloud.com", "apple.co", "me.com", "mzstatic.com", "cdn-apple.com"],
+    "netflix": ["netflix.com", "nflxext.com", "nflximg.net", "nflxvideo.net", "nflxso.net"],
+    "whatsapp": ["whatsapp.com", "whatsapp.net", "wa.me", "whats.app"],
+    "microsoft": ["microsoft.com", "microsoftonline.com", "live.com", "office.com", "office365.com", "outlook.com", "bing.com", "azure.com", "windows.com", "msn.com", "xbox.com", "skype.com", "onedrive.com", "windowsazure.com", "azureedge.net", "sharepoint.com", "linkedin.com", "github.com", "githubusercontent.com", "visualstudio.com", "msft.net", "office.net"],
+    "instagram": ["instagram.com", "cdninstagram.com", "instagr.am"],
+    "telegram": ["telegram.org", "t.me", "telegram.me", "telegra.ph", "telesco.pe"],
+    "twitter": ["twitter.com", "x.com", "twimg.com"],
+    "tiktok": ["tiktok.com", "tiktokv.com", "tiktokcdn.com"],
+    "discord": ["discord.com", "discord.gg", "discordapp.com", "discordapp.net"],
+    "steam": ["steampowered.com", "steamcommunity.com", "steamstatic.com", "steam-chat.com", "valvesoftware.com"],
+    "binance": ["binance.com", "binance.us", "binance.me", "binance.org"],
+    "coinbase": ["coinbase.com"],
+    "metamask": ["metamask.io"],
+    "trustwallet": ["trustwallet.com"],
+    "kraken": ["kraken.com"],
+    "dhl": ["dhl.com", "dhl.de", "dhl.co.in", "dhl.co.uk"],
+    "fedex": ["fedex.com"],
+    "ups": ["ups.com"],
+    "usps": ["usps.com"],
+    "indiapost": ["indiapost.gov.in"],
+    "chase": ["chase.com", "jpmorganchase.com", "jpmorgan.com"],
+    "wellsfargo": ["wellsfargo.com"],
+    "bankofamerica": ["bankofamerica.com", "bofa.com"],
+    "citibank": ["citibank.com", "citi.com", "citibank.co.in"],
+    "barclays": ["barclays.co.uk", "barclays.com"],
+    "hsbc": ["hsbc.com", "hsbc.co.in", "hsbc.co.uk"],
+    "paytm": ["paytm.com", "paytmbank.com", "paytm.in", "paytmmall.com"],
+    "phonepe": ["phonepe.com"],
+    "flipkart": ["flipkart.com", "fkrt.it", "fkrt.cc", "flixcart.com"],
+    "irctc": ["irctc.co.in", "irctc.com"],
+    "aadhaar": ["uidai.gov.in"],
+    "uidai": ["uidai.gov.in"],
+    "kotak": ["kotak.com", "kotak.bank.in", "kotaksecurities.com"],
+    "pnb": ["pnbindia.in", "pnb.bank.in"],
+    "airtel": ["airtel.in", "airtel.com", "airtelbank.com", "airtelpaymentsbank.com"],
+    "jio": ["jio.com", "jiocinema.com", "jiosaavn.com", "ril.com", "jiomart.com"]
+  },
+
+  "knownGood": [
+    "wikipedia.org", "wikimedia.org", "gitlab.com", "stackoverflow.com", "stackexchange.com", "reddit.com", "quora.com",
+    "medium.com", "zoom.us", "slack.com", "notion.so", "canva.com", "myntra.com", "swiggy.com", "zomato.com",
+    "npci.org.in", "makemytrip.com", "bookmyshow.com", "hotstar.com", "airtel.in", "vi.in", "bsnl.co.in",
+    "indiatimes.com", "thehindu.com", "ndtv.com", "hindustantimes.com", "indianexpress.com", "bbc.com", "bbc.co.uk",
+    "cnn.com", "nytimes.com", "apache.org", "python.org", "nodejs.org", "npmjs.com", "mozilla.org", "cloudflare.com",
+    "wordpress.com", "wordpress.org", "spotify.com", "imdb.com", "pinterest.com", "snapchat.com", "ebay.com", "ebay.in",
+    "adobe.com", "dropbox.com", "oracle.com", "ibm.com", "intel.com", "samsung.com", "mi.com", "oneplus.com", "oppo.com",
+    "vivo.com", "realme.com", "nic.in", "digilocker.gov.in", "w3.org", "mdn.io", "developer.mozilla.org", "kaggle.com",
+    "coursera.org", "udemy.com", "edx.org", "khanacademy.org", "nptel.ac.in", "swayam.gov.in", "ugc.ac.in", "aicte-india.org",
+    "vtu.ac.in", "razorpay.com", "cashfree.com", "bhimupi.org.in", "ola.com", "olacabs.com", "uber.com", "rapido.bike",
+    "nykaa.com", "meesho.com", "ajio.com", "tatacliq.com", "bigbasket.com", "blinkit.com", "dunzo.com", "1mg.com", "pharmeasy.in"
+  ],
+
+  "trustedSuffixes": [".gov.in", ".nic.in", ".gov", ".edu", ".ac.in", ".edu.in", ".mil", ".gov.uk", ".ac.uk", ".bank.in"],
+
+  "highRiskTlds": ["xyz", "top", "click", "gq", "cf", "tk", "ml", "ga", "cyou", "monster", "buzz", "rest", "download", "work", "zip", "mov", "loan", "men", "country", "stream", "racing", "win"],
+  "moderateRiskTlds": ["site", "online", "info", "biz", "live", "cc", "icu", "shop", "store", "vip", "club", "link", "support", "fun", "space", "website", "life", "today", "digital", "pw", "ws"],
+
+  "scamTokens": [
+    "kyc", "claim", "refund", "recharge", "reward", "rewards", "prize", "lottery", "gift", "giftcard", "offer", "bonus", "free",
+    "pending", "bill", "electricity", "upi", "verify", "verification", "update", "secure", "security", "login", "signin",
+    "account", "suspend", "suspended", "blocked", "airdrop", "wallet", "alert", "helpdesk", "customercare", "support",
+    "cashback", "winner", "congratulations", "otp", "pan", "aadhaar", "challan", "fine", "parcel", "delivery", "tracking",
+    "invest", "trading", "crypto", "loan", "instant", "jackpot", "unlock", "confirm", "validate", "reactivate"
+  ],
+
+  "pathKeywords": [
+    "verify", "login", "secure", "account", "update", "confirm", "auth", "banking", "wallet", "password", "reset", "kyc",
+    "otp", "pin", "session", "signin", "validate", "portal", "authenticate", "claim", "refund", "reward"
+  ],
+
+  "typosquatPatterns": [
+    ["paypall", "PAYPAL"], ["pay-pal", "PAYPAL"], ["peypal", "PAYPAL"],
+    ["arnazon", "AMAZON"], ["amazzon", "AMAZON"], ["amz-verify", "AMAZON"],
+    ["gooogle", "GOOGLE"], ["googie", "GOOGLE"],
+    ["apple-support-id", "APPLE"],
+    ["microsofl", "MICROSOFT"], ["msft-security", "MICROSOFT"],
+    ["net-flix", "NETFLIX"], ["netfiix", "NETFLIX"],
+    ["whatsaap", "WHATSAPP"], ["watsapp", "WHATSAPP"],
+    ["hdfc-bank", "HDFC BANK"], ["sbi-kyc", "SBI BANK"], ["icici-login", "ICICI BANK"],
+    ["metamask-claim", "METAMASK"]
+  ],
+
+  "confusables": {
+    "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x", "і": "i", "ј": "j", "ѕ": "s", "ԁ": "d", "һ": "h",
+    "ӏ": "l", "ԛ": "q", "ԝ": "w", "ɡ": "g", "ο": "o", "α": "a", "ρ": "p", "ν": "v", "τ": "t", "ι": "i", "κ": "k", "υ": "u",
+    "ı": "i", "ℓ": "l", "ⅼ": "l", "ɑ": "a", "ɩ": "i", "ʏ": "y", "ᴀ": "a", "ᴅ": "d", "ᴇ": "e", "ꓲ": "l", "ǀ": "l"
+  }
+}

@@ -13,8 +13,18 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   </head>
-  <body>
+  <body style="background:#0b1329;margin:0">
     <div id="root"></div>
+    <!-- If the app bundle fails before React starts, show the error instead of a blank white screen. -->
+    <script>
+      window.addEventListener('error', function (e) {
+        var r = document.getElementById('root');
+        if (r && !r.children.length) {
+          r.innerHTML = '<div style="padding:24px;color:#f8fafc;font-family:system-ui,sans-serif"><h3>CypherBuddy could not start</h3><pre style="white-space:pre-wrap;color:#fda4af;font-size:12px">' +
+            String(e.message || e.error || 'Unknown error').replace(/</g, '&lt;') + '</pre></div>';
+        }
+      });
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

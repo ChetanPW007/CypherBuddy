@@ -76,7 +76,17 @@ export default function App() {
   const [user, setUser] = useState(() => {
     if (typeof localStorage === 'undefined') return null;
     const storedToken = localStorage.getItem('cypherbuddy_token');
-    return storedToken ? { role: 'USER' } : null;
+    if (!storedToken) return null;
+    try {
+      const storedUser = localStorage.getItem('cypherbuddy_user');
+      if (storedUser) {
+        const parsed = JSON.parse(storedUser);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to parse stored user:', e);
+    }
+    return { role: 'USER', name: 'User' };
   });
   const [onboarded, setOnboarded] = useState(false);
   
@@ -262,7 +272,13 @@ export default function App() {
 
   // Handle Auth Login/Register success
   const handleAuthSuccess = (authData) => {
-    setUser(authData.user);
+    const userData = authData.user || { role: authData.role || 'USER', name: 'User' };
+    setUser(userData);
+    try {
+      localStorage.setItem('cypherbuddy_user', JSON.stringify(userData));
+    } catch (e) {
+      console.warn('Failed to persist user profile:', e);
+    }
     bindDeviceToAccount();
     fetchUserReports();
     if (authData.role === 'ADMIN' || authData.user?.role === 'ADMIN') {
@@ -280,6 +296,7 @@ export default function App() {
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('cypherbuddy_token');
+    localStorage.removeItem('cypherbuddy_user');
     setActiveTab('landing');
   };
 

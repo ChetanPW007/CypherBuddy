@@ -84,7 +84,11 @@ export default function Header({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span className="glass-pill" style={{ fontSize: '0.75rem', borderColor: 'var(--brand-cyan)' }}>
               <User size={13} color="var(--brand-cyan)" />
-              {user.name.split(' ')[0]} ({user.role})
+              {((user?.name && typeof user.name === 'string')
+                ? user.name.split(' ')[0]
+                : (user?.email && typeof user.email === 'string'
+                  ? user.email.split('@')[0]
+                  : 'User'))} ({user?.role || 'USER'})
             </span>
             
             <button

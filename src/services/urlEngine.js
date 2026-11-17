@@ -43,11 +43,11 @@ function punycodeDecode(input) {
 }
 
 function decodeIdna(host) {
-  if (!host.includes('xn--')) return host;
+  if (!host || typeof host !== 'string' || !host.includes('xn--')) return host || '';
   try {
     return host.split('.').map((l) => (l.startsWith('xn--') ? punycodeDecode(l.slice(4)) : l)).join('.');
   } catch {
-    return host;
+    return host || '';
   }
 }
 
@@ -76,7 +76,7 @@ function ipv6Internal(host) {
     const v4 = parseIPv4(mapped[1]);
     return v4 ? ipv4Internal(v4) : false;
   }
-  const [h0, h1] = h.split(':');
+  const [h0, h1] = (h || '').split(':');
   const first = parseInt(h0 || '0', 16);
   const second = parseInt(h1 || '0', 16);
   if (first === 0x2001 && second === 0x0db8) return true; // documentation range (Python treats it as private too)
@@ -103,7 +103,7 @@ function parseUrl(raw) {
   return {
     scheme,
     host: host.toLowerCase(),
-    username: userinfo.split(':')[0],
+    username: typeof userinfo === 'string' ? userinfo.split(':')[0] : '',
     path: m[3] || '',
     query: m[4] || '',
   };
@@ -135,7 +135,7 @@ export function createUrlEngine(INTEL) {
   const statusFor = (score) => (score >= DANGEROUS ? 'DANGEROUS' : score >= SUSPICIOUS ? 'SUSPICIOUS' : 'SAFE');
 
   function registrableDomain(host) {
-    const labels = host.split('.').filter(Boolean);
+    const labels = (host || '').split('.').filter(Boolean);
     if (labels.length <= 2) return labels.join('.');
     const last2 = labels.slice(-2).join('.');
     if (MULTI.has(last2) || SHARED.has(last2)) return labels.slice(-3).join('.');
@@ -163,7 +163,7 @@ export function createUrlEngine(INTEL) {
   }
 
   function brandHits(text) {
-    text = text.toLowerCase();
+    text = (text || '').toLowerCase();
     const tokens = text.split(/[.\-_/]+/).filter(Boolean);
     const hits = [];
     for (const brand of BRANDS) {
@@ -324,7 +324,7 @@ export function createUrlEngine(INTEL) {
 
     // 10. Bait words in the hostname
     if (!isIp) {
-      const hostTokens = new Set(host.split(/[.\-_]+/).filter(Boolean));
+      const hostTokens = new Set((host || '').split(/[.\-_]+/).filter(Boolean));
       const bait = [...hostTokens].filter((t) => SCAM_TOKENS.has(t)).sort();
       if (bait.length >= 3) score += 35;
       else if (bait.length === 2) score += 25;

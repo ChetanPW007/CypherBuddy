@@ -85,7 +85,7 @@ export async function analyzeFile(fileObj) {
         findings.push({
           type: 'DANGER',
           icon: 'Lock',
-          title: `Dangerous Permission: ${dp.name.split('.').pop()}`,
+          title: `Dangerous Permission: ${dp.name && typeof dp.name === 'string' ? dp.name.split('.').pop() : 'UNKNOWN'}`,
           desc: dp.desc
         });
       });
@@ -109,7 +109,7 @@ export async function analyzeFile(fileObj) {
 
   } else {
     // Other Files (PDF, EXE, ZIP, IMG)
-    const ext = fileName.split('.').pop().toLowerCase();
+    const ext = typeof fileName === 'string' && fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
     if (['exe', 'bat', 'vbs', 'scr', 'cmd', 'ps1'].includes(ext)) {
       riskScore += 70;
       findings.push({

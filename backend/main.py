@@ -26,6 +26,7 @@ try:
     )
     from backend.sms_service import generate_secure_otp, hash_otp, verify_otp_hash, mask_contact, send_otp
     from backend.db import init_db, get_database, close_db, mongo_client
+    from backend import persist
 except ImportError:
     from security_engine import (
         analyze_url_hardened, analyze_message_hardened, validate_file_magic_bytes, 
@@ -33,6 +34,7 @@ except ImportError:
     )
     from sms_service import generate_secure_otp, hash_otp, verify_otp_hash, mask_contact, send_otp
     from db import init_db, get_database, close_db, mongo_client
+    import persist
 
 
 # Configure Security Audit Logger
@@ -47,11 +49,11 @@ logger = logging.getLogger("cypherbuddy.backend")
 JWT_SECRET = os.getenv("JWT_SECRET", "").strip()
 if not JWT_SECRET:
     # No public default secret: tokens signed with a known key could be forged by anyone who read the repo.
-    JWT_SECRET = secrets.token_urlsafe(64)
-    logger.warning("JWT_SECRET not set - using a random per-process secret (sessions reset on restart). Set JWT_SECRET in production.")
+    JWT_SECRET = persist.stable_secret()
+    logger.warning("JWT_SECRET not set - using a generated secret stored in DATA_DIR. Set JWT_SECRET in production so logins survive redeploys.")
 JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_EXPIRE_MINUTES", "60"))
-REFRESH_TOKEN_EXPIRE_DAYS = 7
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_EXPIRE_MINUTES", "1440"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_EXPIRE_DAYS", "30"))
 
 # Environment Domain Configuration
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://cypherbuddy-opal.vercel.app")
@@ -178,12 +180,33 @@ async def log_audit_event(event_type: str, user_id: str, details: str, ip_addres
         except Exception as e:
             logger.error(f"Failed writing audit log to MongoDB: {str(e)}")
 
+def _load_local_state():
+    """No MongoDB: reload accounts and scan history saved by a previous run (see persist.py)."""
+    for rec in persist.load_json("users.json", []):
+        if rec.get("email"):
+            USERS_DB[rec["email"]] = rec
+            if rec.get("phone"):
+                USERS_DB[rec["phone"]] = rec
+    REPORTS_DB.extend(persist.load_json("reports.json", []))
+    logger.info(f"Loaded {len(persist.unique_records(USERS_DB))} saved users from {persist.DATA_DIR}")
+
+
+async def _save_local_state():
+    """Mirror users and scan history to disk when MongoDB is not in use."""
+    if await get_database() is not None:
+        return
+    persist.save_json("users.json", persist.unique_records(USERS_DB))
+    persist.save_json("reports.json", REPORTS_DB[-500:])
+
+
 # Database & Admin Seed Startup Lifecycle Event
 @app.on_event("startup")
 async def on_startup():
     await init_db()
     db = await get_database()
 
+    if db is None:
+        _load_local_state()
     seed_in_memory_defaults()
     admin_record, demo_user = _build_seed_accounts()
 
@@ -375,10 +398,18 @@ def read_root():
 async def health_check():
     db = await get_database()
     db_status = "connected" if db is not None else "standalone_mode"
-    return {
-        "status": "ok",
-        "database": db_status
-    }
+    info = {"status": "ok", "database": db_status, "persistent": db is not None}
+    if db is not None:
+        try:
+            info["users"] = await db.users.count_documents({})
+        except Exception as e:  # database reachable at start-up but failing now
+            info["database"] = "error"
+            info["persistent"] = False
+            logger.error(f"Health check could not query MongoDB: {e}")
+    else:
+        info["users"] = len(persist.unique_records(USERS_DB))
+        info["note"] = "MONGODB_URI is not set: data is kept in a local file and may be lost on redeploy."
+    return info
 
 # ----------------------------------------------------
 # UNIFIED AUTHENTICATION ENDPOINTS (AUTO DETECTS ADMIN & TRIGGERS OTP)
@@ -416,11 +447,12 @@ async def register(req: RegisterRequest):
         USERS_DB[phone_clean] = user_record
     if db is not None:
         await db.users.insert_one(user_record)
+    await _save_local_state()
 
     await log_audit_event("USER_REGISTERED", new_id, f"Registered email {email_clean} phone {phone_clean}")
 
     access_token = create_access_token({"sub": email_clean, "role": "USER"})
-    refresh_token = create_access_token({"sub": email_clean, "type": "refresh"}, datetime.timedelta(days=7))
+    refresh_token = create_access_token({"sub": email_clean, "type": "refresh"}, datetime.timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
 
     return TokenResponse(
         accessToken=access_token,
@@ -529,7 +561,7 @@ async def login(req: LoginRequest, request: Request):
 
     # STANDARD USER LOGIN
     access_token = create_access_token({"sub": user["email"], "role": user["role"]})
-    refresh_token = create_access_token({"sub": user["email"], "type": "refresh"}, datetime.timedelta(days=7))
+    refresh_token = create_access_token({"sub": user["email"], "type": "refresh"}, datetime.timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
     
     await log_audit_event("LOGIN_SUCCESS", user["id"], f"Role {user['role']} logged in", client_ip)
 
@@ -649,7 +681,7 @@ async def admin_verify_otp(req: AdminVerifyOtpRequest, request: Request):
         await db.otp_requests.delete_one({"contact": contact_clean})
 
     access_token = create_access_token({"sub": admin_user["email"], "role": "ADMIN"})
-    refresh_token = create_access_token({"sub": admin_user["email"], "type": "refresh"}, datetime.timedelta(days=7))
+    refresh_token = create_access_token({"sub": admin_user["email"], "type": "refresh"}, datetime.timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
 
     await log_audit_event("SUCCESSFUL_ADMIN_LOGIN", admin_user["id"], "Full 2-Step OTP Admin Auth Passed", client_ip)
 
@@ -669,6 +701,41 @@ async def admin_verify_otp(req: AdminVerifyOtpRequest, request: Request):
 @app.post("/api/auth/admin/resend-otp")
 async def admin_resend_otp(req: AdminLoginRequest, request: Request):
     return await login(LoginRequest(email=req.phone_or_email, password=req.password), request)
+
+class RefreshRequest(BaseModel):
+    refreshToken: str = Field(..., min_length=10, max_length=4096)
+
+
+@app.post("/api/auth/refresh", response_model=TokenResponse)
+async def refresh_session(req: RefreshRequest):
+    """Exchanges a valid refresh token for a new access token, so the user stays signed in after closing the app."""
+    try:
+        payload = jwt.decode(req.refreshToken, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Session expired. Please sign in again.")
+    if payload.get("type") != "refresh" or not payload.get("sub"):
+        raise HTTPException(status_code=401, detail="Invalid refresh token.")
+
+    sub = payload["sub"]
+    user = None
+    db = await get_database()
+    if db is not None:
+        user = await db.users.find_one({"$or": [{"email": sub}, {"phone": sub}]}) or await db.admin_users.find_one({"$or": [{"email": sub}, {"phone": sub}]})
+    if not user:
+        user = USERS_DB.get(sub) or ADMIN_USERS_DB.get(sub)
+    if not user:
+        raise HTTPException(status_code=401, detail="User account no longer active. Please sign in again.")
+
+    role = user.get("role", "USER")
+    access_token = create_access_token({"sub": user["email"], "role": role})
+    new_refresh = create_access_token({"sub": user["email"], "type": "refresh"}, datetime.timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+    return TokenResponse(
+        accessToken=access_token,
+        refreshToken=new_refresh,
+        role=role,
+        user={"id": user["id"], "name": user.get("name", ""), "email": user["email"], "phone": user.get("phone", ""), "role": role}
+    )
+
 
 @app.post("/api/auth/logout")
 async def logout(user: Dict[str, Any] = Depends(get_current_user)):
@@ -823,6 +890,7 @@ async def scan_url(req: UrlScanRequest, user: Dict[str, Any] = Depends(get_curre
     if db is not None:
         await db.security_scans.insert_one(scan_doc)
         await db.reports.insert_one(scan_doc)
+    await _save_local_state()
 
     await log_audit_event("URL_SCAN", user["id"], f"Target: {req.url} Risk: {result['riskScore']}")
     return result

@@ -24,6 +24,7 @@ import { API_BASE_URL, safeApiCall } from './config/apiConfig';
 import { bindDeviceToAccount } from './utils/deviceInfo';
 import { extractUrl } from './services/linkGate';
 import { CapApp } from './services/nativeBridge';
+import { getStoredUser, clearSession } from './services/session';
 import './styles/glassmorphism.css';
 
 const INITIAL_HISTORY = [
@@ -73,17 +74,14 @@ const INITIAL_FAMILY_ALERTS = [
 export default function App() {
   // Light Theme Default as requested
   const [theme, setTheme] = useState('light');
-  const [user, setUser] = useState(() => {
-    if (typeof localStorage === 'undefined') return null;
-    const storedToken = localStorage.getItem('cypherbuddy_token');
-    return storedToken ? { role: 'USER' } : null;
-  });
+  // Restore the saved login (name, role) so closing and reopening the app keeps the user signed in.
+  const [user, setUser] = useState(() => getStoredUser());
   const [onboarded, setOnboarded] = useState(false);
   
   const [activeTab, setActiveTab] = useState(() => {
-    if (typeof localStorage === 'undefined') return 'landing';
-    const storedToken = localStorage.getItem('cypherbuddy_token');
-    if (!storedToken) return 'landing';
+    const saved = getStoredUser();
+    if (!saved) return 'landing';
+    if (saved.role === 'ADMIN') return 'admin';
     const isSetupDone = localStorage.getItem('cypherbuddy_setup_completed') === 'true';
     return isSetupDone ? 'home' : 'setup';
   });
@@ -226,6 +224,16 @@ export default function App() {
     activeUrlRef.current = targetSharedUrl;
   }, [targetSharedUrl]);
 
+  // The server said the saved session is really gone (not just a slow network): go back to sign-in.
+  useEffect(() => {
+    const onExpired = () => {
+      setUser(null);
+      setActiveTab('auth');
+    };
+    window.addEventListener('cypherbuddy:session-expired', onExpired);
+    return () => window.removeEventListener('cypherbuddy:session-expired', onExpired);
+  }, []);
+
   // Stable identities: LinkProtectionOverlay must not see new function objects on every App render.
   const closeLinkOverlay = useCallback(() => setTargetSharedUrl(null), []);
 
@@ -264,7 +272,7 @@ export default function App() {
 
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem('cypherbuddy_token');
+    clearSession();
     setActiveTab('landing');
   };
 

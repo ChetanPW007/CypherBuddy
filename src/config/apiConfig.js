@@ -1,6 +1,8 @@
 // CypherBuddy Central Production API Configuration
 // Points to deployed Render FastAPI backend in production
 
+import { getAccessToken, getRefreshToken, saveSession, clearSession } from '../services/session';
+
 export const API_BASE_URL = 
   import.meta.env?.VITE_API_BASE_URL || 
   import.meta.env?.VITE_API_URL || 
@@ -22,7 +24,7 @@ export async function safeApiCall(endpoint, options = {}) {
   };
 
   // Attach JWT Bearer token if present in localStorage or user session
-  const token = localStorage.getItem('cypherbuddy_token');
+  const token = getAccessToken();
   if (token && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -45,6 +47,16 @@ export async function safeApiCall(endpoint, options = {}) {
       data = await response.json();
     } catch {
       data = { detail: 'Unexpected server response format.' };
+    }
+
+    // Expired access token: renew it silently with the refresh token and retry once, so the user stays logged in.
+    if (response.status === 401 && !options._retried && !endpoint.includes('/api/auth/') && getRefreshToken()) {
+      const outcome = await refreshSession();
+      if (outcome === 'ok') {
+        const retryHeaders = { ...(options.headers || {}) };
+        delete retryHeaders['Authorization'];
+        return safeApiCall(endpoint, { ...options, headers: retryHeaders, _retried: true });
+      }
     }
 
     if (!response.ok) {
@@ -77,6 +89,44 @@ export async function safeApiCall(endpoint, options = {}) {
       error: 'CypherBuddy server is temporarily starting up or unavailable. Please try again in a moment.'
     };
   }
+}
+
+let refreshInFlight = null;
+
+/**
+ * Trades the refresh token for a new access token.
+ * Returns 'ok', 'invalid' (server rejected the session - user is signed out) or 'offline' (server unreachable -
+ * the session is kept so the user is not logged out just because Render is waking up).
+ */
+export function refreshSession() {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return 'invalid';
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        saveSession({ accessToken: data.accessToken, refreshToken: data.refreshToken, user: data.user });
+        return 'ok';
+      }
+      if (res.status === 401 || res.status === 403) {
+        clearSession();
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('cypherbuddy:session-expired'));
+        return 'invalid';
+      }
+      return 'offline';
+    } catch {
+      return 'offline';
+    } finally {
+      setTimeout(() => { refreshInFlight = null; }, 0);
+    }
+  })();
+  return refreshInFlight;
 }
 
 function getHttpStatusMessage(status) {

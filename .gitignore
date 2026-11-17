@@ -27,3 +27,6 @@ backend/security_audit.log
 *.swp
 Thumbs.db
 .DS_Store
+
+# Local JSON persistence (users, reports, generated JWT secret)
+backend/data/

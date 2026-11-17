@@ -14,6 +14,12 @@ services:
       - key: CORS_ORIGINS
         value: "*"
       # Secrets: set these in the Render dashboard (sync: false = never stored in the repo)
+      # Database: set MONGODB_URI (MongoDB Atlas) so users and scan history persist across restarts and redeploys.
+      # Without it the backend falls back to a local file that Render's free disk loses on redeploy.
+      - key: MONGODB_URI
+        sync: false
+      - key: DATABASE_NAME
+        value: cypherbuddy
       - key: ADMIN_PASSWORD
         sync: false
       - key: ADMIN_EMAIL

@@ -11,6 +11,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { safeApiCall } from '../config/apiConfig';
+import { saveSession } from '../services/session';
 
 export default function AdminAuthScreen({ onAdminAuthSuccess }) {
   const [step, setStep] = useState(1); // Step 1: Credentials, Step 2: OTP
@@ -98,7 +99,7 @@ export default function AdminAuthScreen({ onAdminAuthSuccess }) {
 
       const data = response.data;
       if (data.accessToken) {
-        localStorage.setItem('cypherbuddy_token', data.accessToken);
+        saveSession({ accessToken: data.accessToken, refreshToken: data.refreshToken, user: data.user });
       }
 
       setSuccessMsg('🎉 2-Step OTP Authentication successful! Opening Admin Dashboard...');

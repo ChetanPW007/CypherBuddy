@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import GlassCard from '../components/GlassCard';
 import { Lock, Mail, User, Phone, KeyRound, AlertTriangle, ArrowRight, RefreshCw, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { safeApiCall } from '../config/apiConfig';
+import { saveSession } from '../services/session';
+
+// Demo build: after credentials are accepted, the app shows a simulated phone OTP. This default code is always valid.
+const DEMO_OTP = '1234';
 
 const COUNTRY_CODES = [
   { code: '+91', country: '🇮🇳 India (+91)' },
@@ -13,6 +17,15 @@ const COUNTRY_CODES = [
   { code: '+971', country: '🇦🇪 UAE (+971)' },
   { code: '+65', country: '🇸🇬 Singapore (+65)' }
 ];
+
+function maskContact(value) {
+  const v = String(value || '');
+  if (v.includes('@')) {
+    const [user, domain] = v.split('@');
+    return `${user.slice(0, 2)}***@${domain}`;
+  }
+  return v.length > 4 ? `${v.slice(0, 3)}${'*'.repeat(Math.max(v.length - 5, 2))}${v.slice(-2)}` : v;
+}
 
 export default function AuthScreen({ onAuthSuccess, onBackToLanding: _onBackToLanding }) {
   const [isRegister, setIsRegister] = useState(false);
@@ -28,7 +41,8 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding: _onBackToLa
   const [loginContact, setLoginContact] = useState('');
 
   // 2-Step OTP State for Admin Login
-  const [step, setStep] = useState(1); // 1: Credentials, 2: OTP Verification
+  const [step, setStep] = useState(1); // 1: Credentials, 2: Admin OTP (real, 6 digits), 3: Demo OTP (simulated, 4 digits)
+  const [pendingAuth, setPendingAuth] = useState(null);
   const [otp, setOtp] = useState('');
   const [maskedContact, setMaskedContact] = useState('');
   const [cooldown, setCooldown] = useState(0);
@@ -115,18 +129,18 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding: _onBackToLa
         return;
       }
 
-      // Store Auth Tokens securely
-      if (data.accessToken) {
-        localStorage.setItem('cypherbuddy_token', data.accessToken);
-      }
-
-      // Standard User Login Success
-      onAuthSuccess({
+      // Credentials accepted. Show the simulated OTP step (default code 1234) before opening the app.
+      setPendingAuth({
         accessToken: data.accessToken,
         refreshToken: data.refreshToken,
         role: data.role,
         user: data.user
       });
+      setMaskedContact(maskContact(isRegister ? (fullPhone || emailInput.trim()) : loginContact.trim()));
+      setOtp(DEMO_OTP);
+      setSuccessMsg(`OTP sent (simulation). Your demo code is ${DEMO_OTP}.`);
+      setStep(3);
+      setCooldown(30);
 
     } catch (err) {
       setError(err.message || 'Authentication failed. Please try again.');
@@ -163,7 +177,7 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding: _onBackToLa
       const data = res.data;
 
       if (data.accessToken) {
-        localStorage.setItem('cypherbuddy_token', data.accessToken);
+        saveSession({ accessToken: data.accessToken, refreshToken: data.refreshToken, user: data.user });
       }
 
       setSuccessMsg('🎉 2-Step OTP Authentication successful! Opening Admin Dashboard...');
@@ -187,6 +201,28 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding: _onBackToLa
     } finally {
       setLoading(false);
     }
+  };
+
+  // STEP 3: Simulated OTP for normal users (default code 1234)
+  const handleVerifyDemoOtp = (e) => {
+    e.preventDefault();
+    if (loading || !pendingAuth) return;
+    if (otp.trim() !== DEMO_OTP) {
+      setError(`Incorrect OTP. For this demo the code is always ${DEMO_OTP}.`);
+      return;
+    }
+    setError('');
+    saveSession(pendingAuth); // persists the login: it survives closing the app
+    setSuccessMsg('Verified! Opening CypherBuddy...');
+    onAuthSuccess(pendingAuth);
+  };
+
+  const handleResendDemoOtp = () => {
+    if (cooldown > 0) return;
+    setOtp(DEMO_OTP);
+    setError('');
+    setSuccessMsg(`New OTP sent (simulation). Your demo code is ${DEMO_OTP}.`);
+    setCooldown(30);
   };
 
   // Resend OTP
@@ -241,10 +277,10 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding: _onBackToLa
             )}
           </div>
           <h2 style={{ fontSize: '1.4rem', fontWeight: 800 }}>
-            {step === 2 ? 'Admin 2-Step Verification' : (isRegister ? 'Create Secure Account' : 'Sign In to CypherBuddy')}
+            {step === 2 ? 'Admin 2-Step Verification' : step === 3 ? 'Verify Your OTP' : (isRegister ? 'Create Secure Account' : 'Sign In to CypherBuddy')}
           </h2>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-            {step === 2 ? 'Enter 6-digit security OTP to access Admin Dashboard' : 'Zero plaintext password storage • Hashed via Bcrypt'}
+            {step === 2 ? 'Enter 6-digit security OTP to access Admin Dashboard' : step === 3 ? 'Enter the 4-digit code sent to your phone' : 'Zero plaintext password storage • Hashed via Bcrypt'}
           </p>
         </div>
 
@@ -617,6 +653,39 @@ export default function AuthScreen({ onAuthSuccess, onBackToLanding: _onBackToLa
                 }}
               >
                 <RefreshCw size={12} className={loading ? 'spin' : ''} />
+                {cooldown > 0 ? `Resend OTP in ${cooldown}s` : 'Resend OTP'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* STEP 3: Simulated 4-digit OTP (demo code 1234, pre-filled) */}
+        {step === 3 && (
+          <form onSubmit={handleVerifyDemoOtp} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ textAlign: 'center', padding: '12px', borderRadius: '12px', background: 'var(--input-bg)', border: '1px solid var(--glass-border)' }}>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>OTP sent to:</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--brand-cyan)', marginTop: '2px' }}>{maskedContact}</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-subtle)', marginTop: '6px' }}>Demo mode: the code is always {DEMO_OTP}</div>
+            </div>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              autoFocus
+              placeholder="• • • •"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ''))}
+              style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid var(--brand-cyan)', background: 'var(--input-bg)', color: 'var(--text-main)', fontSize: '1.6rem', fontWeight: 800, letterSpacing: '0.4em', textAlign: 'center', outline: 'none' }}
+              required
+            />
+            <button type="submit" disabled={otp.length !== 4} className="btn-primary" style={{ background: 'linear-gradient(135deg, #059669 0%, #0284c7 100%)' }}>
+              Verify &amp; Continue <KeyRound size={18} />
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '4px' }}>
+              <button type="button" onClick={() => { setStep(1); setPendingAuth(null); setOtp(''); setSuccessMsg(''); setError(''); }} style={{ background: 'none', border: 'none', color: 'var(--text-subtle)', fontSize: '0.78rem', cursor: 'pointer' }}>
+                &larr; Back
+              </button>
+              <button type="button" onClick={handleResendDemoOtp} disabled={cooldown > 0} style={{ background: 'none', border: 'none', color: cooldown > 0 ? 'var(--text-subtle)' : 'var(--brand-cyan)', fontSize: '0.78rem', cursor: cooldown > 0 ? 'not-allowed' : 'pointer', fontWeight: 600 }}>
                 {cooldown > 0 ? `Resend OTP in ${cooldown}s` : 'Resend OTP'}
               </button>
             </div>

@@ -27,8 +27,11 @@ async def init_db():
     uri = os.getenv("MONGODB_URI", "").strip()
     db_name = os.getenv("DATABASE_NAME", "cypherbuddy").strip()
     
-    if not MOTOR_AVAILABLE or not uri:
-        logger.warning("Motor not installed or MONGODB_URI not provided. Running with in-memory state fallback.")
+    if not MOTOR_AVAILABLE:
+        logger.warning("MongoDB driver (motor) is not installed. Running with local-file fallback.")
+        return False
+    if not uri:
+        logger.warning("MONGODB_URI is not set in the environment. Running with local-file fallback.")
         return False
 
     try:
@@ -61,7 +64,10 @@ async def init_db():
         return True
 
     except Exception as e:
-        logger.error(f"Failed to connect to MongoDB at {uri}: {str(e)}")
+        # Never log the URI: it contains the database password. The error class and text are enough to diagnose.
+        reason = str(e).replace(uri, "<MONGODB_URI>")
+        logger.error(f"Failed to connect to MongoDB ({type(e).__name__}): {reason[:300]}")
+        logger.error("Common causes: wrong password in MONGODB_URI, Atlas Network Access not allowing 0.0.0.0/0, or special characters in the password that need URL-encoding.")
         mongo_client = None
         db = None
         return False

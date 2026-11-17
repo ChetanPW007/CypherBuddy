@@ -2,7 +2,7 @@
 # restart of the backend. With MONGODB_URI set, MongoDB remains the primary store and these files are not needed.
 #
 # Files live in DATA_DIR (default: backend/data, git-ignored). On hosts with an ephemeral disk (Render free tier)
-# the files are lost on redeploy: set MONGODB_URI there for data that must last.
+# the files are lost whenever the instance sleeps or redeploys: set MONGODB_URI there for data that must last.
 
 import json
 import os

@@ -15,7 +15,7 @@ services:
         value: "*"
       # Secrets: set these in the Render dashboard (sync: false = never stored in the repo)
       # Database: set MONGODB_URI (MongoDB Atlas) so users and scan history persist across restarts and redeploys.
-      # Without it the backend falls back to a local file that Render's free disk loses on redeploy.
+      # Without it the backend falls back to a local file, and Render's free disk is erased whenever the instance sleeps or redeploys.
       - key: MONGODB_URI
         sync: false
       - key: DATABASE_NAME

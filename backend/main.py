@@ -38,10 +38,11 @@ except ImportError:
 
 
 # Configure Security Audit Logger
+# Log to stdout (so Render's Logs tab shows database/start-up messages) and to the audit file.
 logging.basicConfig(
-    filename='security_audit.log',
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] SECURITY_AUDIT: %(message)s'
+    format='%(asctime)s [%(levelname)s] SECURITY_AUDIT: %(message)s',
+    handlers=[logging.StreamHandler(), logging.FileHandler('security_audit.log')]
 )
 logger = logging.getLogger("cypherbuddy.backend")
 
@@ -206,7 +207,10 @@ async def on_startup():
     db = await get_database()
 
     if db is None:
+        logger.warning("DATABASE: NOT CONNECTED (standalone mode). Users and scans are NOT permanent. Set MONGODB_URI to fix this.")
         _load_local_state()
+    else:
+        logger.info("DATABASE: connected to MongoDB - users and scans are permanent.")
     seed_in_memory_defaults()
     admin_record, demo_user = _build_seed_accounts()
 
@@ -394,7 +398,7 @@ def read_root():
         "timestamp": datetime.datetime.utcnow().isoformat()
     }
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
     db = await get_database()
     db_status = "connected" if db is not None else "standalone_mode"

@@ -114,6 +114,7 @@ export default function App() {
   // Version comparison helper: returns true ONLY if latest > current
   const isNewerVersion = (latest, current) => {
     try {
+      if (!latest || !current || typeof latest !== 'string' || typeof current !== 'string') return false;
       const lParts = latest.split('.').map(Number);
       const cParts = current.split('.').map(Number);
       for (let i = 0; i < Math.max(lParts.length, cParts.length); i++) {
@@ -138,7 +139,6 @@ export default function App() {
       console.warn('Failed to load user reports:', e);
     }
   };
-
   // Check for In-App update availability
   useEffect(() => {
     const checkAppUpdate = async () => {

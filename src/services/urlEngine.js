@@ -337,7 +337,7 @@ export function createUrlEngine(INTEL) {
     }
 
     // 11. Subdomain nesting
-    const extra = host.split('.').filter(Boolean).length - reg.split('.').filter(Boolean).length;
+    const extra = (host || '').split('.').filter(Boolean).length - (reg || '').split('.').filter(Boolean).length;
     if (extra > 3) {
       score += 20;
       add(findings, 'WARNING', 'Deep Subdomain Nesting', 'Multiple nested subdomains hide the true hosting domain.');

@@ -36,6 +36,10 @@ import java.util.List;
 public class LinkOpenerPlugin extends Plugin {
 
     private static final String CHROME = "com.android.chrome";
+    private static final String YOUTUBE_PKG = "com.google.android.youtube";
+    private static final String WHATSAPP_PKG = "com.whatsapp";
+    private static final String WHATSAPP_BIZ_PKG = "com.whatsapp.w4b";
+
     private static final String[] PREFERRED = {
             CHROME,
             "com.chrome.beta",
@@ -46,6 +50,44 @@ public class LinkOpenerPlugin extends Plugin {
             "com.opera.browser",
             "com.android.browser"
     };
+
+    private boolean isPackageInstalled(Context ctx, String packageName) {
+        try {
+            ctx.getPackageManager().getPackageInfo(packageName, 0);
+            return true;
+        } catch (PackageManager.NameNotFoundException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Intelligently selects the best native application or browser to open the verified link:
+     * - WhatsApp URLs (wa.me, chat.whatsapp.com, api.whatsapp.com) -> WhatsApp app
+     * - YouTube URLs (youtu.be, youtube.com, m.youtube.com) -> YouTube app
+     * - Standard URLs -> Chrome or other installed web browsers
+     */
+    private String pickTargetPackage(Context ctx, Uri uri) {
+        String host = uri.getHost() != null ? uri.getHost().toLowerCase() : "";
+
+        // 1. WhatsApp Links (chat invites, wa.me, direct message links)
+        if (host.equals("wa.me") || host.equals("chat.whatsapp.com") || host.equals("api.whatsapp.com") || host.endsWith(".whatsapp.com")) {
+            if (isPackageInstalled(ctx, WHATSAPP_PKG)) {
+                return WHATSAPP_PKG;
+            } else if (isPackageInstalled(ctx, WHATSAPP_BIZ_PKG)) {
+                return WHATSAPP_BIZ_PKG;
+            }
+        }
+
+        // 2. YouTube / Video Links
+        if (host.equals("youtu.be") || host.equals("youtube.com") || host.endsWith(".youtube.com")) {
+            if (isPackageInstalled(ctx, YOUTUBE_PKG)) {
+                return YOUTUBE_PKG;
+            }
+        }
+
+        // 3. Fallback to standard web browsers
+        return pickBrowserPackage(ctx, uri);
+    }
 
     /** Picks the browser package to use: Chrome if installed, else another preferred one, else any non-CypherBuddy handler. */
     private String pickBrowserPackage(Context ctx, Uri uri) {
@@ -83,22 +125,41 @@ public class LinkOpenerPlugin extends Plugin {
         Context ctx = getContext();
         Uri uri = Uri.parse(url);
 
-        String pkg = pickBrowserPackage(ctx, uri);
+        String pkg = pickTargetPackage(ctx, uri);
         if (pkg == null) {
-            call.reject("No other browser is installed to open this link.");
+            call.reject("No compatible application or browser is installed to open this link.");
             return;
         }
 
         Intent intent = new Intent(Intent.ACTION_VIEW, uri)
-                .addCategory(Intent.CATEGORY_BROWSABLE)
-                .setPackage(pkg)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+        if (!WHATSAPP_PKG.equals(pkg) && !WHATSAPP_BIZ_PKG.equals(pkg) && !YOUTUBE_PKG.equals(pkg)) {
+            intent.addCategory(Intent.CATEGORY_BROWSABLE);
+        }
+        intent.setPackage(pkg);
 
         try {
             ctx.startActivity(intent);
         } catch (ActivityNotFoundException e) {
-            call.reject("Could not launch the browser.");
-            return;
+            // Fallback: try opening with default browser if specialized native app launch fails
+            try {
+                String fallbackPkg = pickBrowserPackage(ctx, uri);
+                if (fallbackPkg != null) {
+                    Intent fallbackIntent = new Intent(Intent.ACTION_VIEW, uri)
+                            .addCategory(Intent.CATEGORY_BROWSABLE)
+                            .setPackage(fallbackPkg)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    ctx.startActivity(fallbackIntent);
+                    pkg = fallbackPkg;
+                } else {
+                    call.reject("Could not launch application or browser.");
+                    return;
+                }
+            } catch (Exception ex) {
+                call.reject("Could not launch target application.");
+                return;
+            }
         }
 
         if (background && activity != null) {

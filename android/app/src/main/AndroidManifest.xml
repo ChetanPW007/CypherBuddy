@@ -10,9 +10,12 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <!-- Android 11+ package visibility: lets LinkOpenerPlugin see which browsers can open web links
-         (so it can pick Chrome and never loop back into CypherBuddy). -->
+    <!-- Android 11+ package visibility: lets LinkOpenerPlugin see which browsers and native apps
+         (Chrome, YouTube, WhatsApp) can open links safely. -->
     <queries>
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.BROWSABLE" />

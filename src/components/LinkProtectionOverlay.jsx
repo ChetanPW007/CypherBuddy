@@ -111,6 +111,21 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
   const accentLine = dangerous ? 'rgba(244, 63, 94, 0.3)' : 'rgba(245, 158, 11, 0.3)';
   const scanning = phase === 'scanning';
 
+  const isWhatsApp = /^(https?:\/\/)?(www\.)?(wa\.me|chat\.whatsapp\.com|api\.whatsapp\.com|whatsapp\.com)\b/i.test(targetUrl);
+  const isVideo = /^(https?:\/\/)?(www\.)?(youtu\.be|youtube\.com|m\.youtube\.com|vimeo\.com)\b/i.test(targetUrl) || /\.(mp4|webm|mkv|mov)(\?.*)?$/i.test(targetUrl);
+
+  const scanTitle = isWhatsApp
+    ? '💬 Checking WhatsApp link safety...'
+    : isVideo
+    ? '🎥 Checking video link safety...'
+    : '🛡️ Checking link safety...';
+
+  const scanSubtitle = isWhatsApp
+    ? 'Verifying contact / group invite security'
+    : isVideo
+    ? 'Verifying video stream destination'
+    : 'Powered by CypherBuddy AI';
+
   return (
     <div
       style={{
@@ -160,9 +175,9 @@ export default function LinkProtectionOverlay({ targetUrl, onClose, onViewReport
           </div>
           <div>
             <div style={{ fontSize: '1rem', fontWeight: 800, color: '#f8fafc', marginBottom: '4px' }}>
-              🛡️ Checking link safety...
+              {scanTitle}
             </div>
-            <div style={{ fontSize: '0.78rem', color: '#64748b' }}>Powered by CypherBuddy AI</div>
+            <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{scanSubtitle}</div>
           </div>
           <div style={{
             background: 'rgba(0,0,0,0.3)',

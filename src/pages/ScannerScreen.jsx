@@ -14,6 +14,14 @@ import {
 import { analyzeUrl, analyzeFile, analyzeMessage, analyzeImageOrQr } from '../services/securityService';
 import { safeApiCall } from '../config/apiConfig';
 
+const MOCK_EXAMPLES = {
+  dangerousLink: 'paypa1-account-security-update.xyz/login.php',
+  safeLink: 'https://google.com',
+  dangerousApk: { name: 'Free_Netflix_Premium_v4.2.apk', size: 10485760, type: 'application/vnd.android.package-archive' },
+  phishingMsg: 'URGENT: Your SBI account has been BLOCKED. Click here immediately: http://sbi-secure-login.xyz/verify to unblock your account.',
+  scamMsg: 'Congratulations! You have won Rs.50,000 prize money! Send OTP 7721 to 56789 to claim your prize now.'
+};
+
 export default function ScannerScreen({ 
   initialType = 'url', 
   onScanComplete 
@@ -28,31 +36,31 @@ export default function ScannerScreen({
   const [scanStepIndex, setScanStepIndex] = useState(0);
   const [scanError, setScanError] = useState('');
 
+  // Plain-language scan step messages
   const scanSteps = [
-    'Checking format & protocol headers...',
-    'Querying reputation indicators & threat intelligence...',
-    'Executing YARA signatures & permission heuristics...',
-    'Generating comprehensive risk score & report...'
+    '🔎 Looking at the structure and format...',
+    '🌐 Checking against known threat databases...',
+    '🧪 Running deep safety checks...',
+    '📊 Calculating risk score and preparing report...'
   ];
 
   const handleStartScan = async (overrideData = null) => {
     setScanError('');
 
-    // Input Validation
     if (activeTab === 'url' && !overrideData && !inputUrl.trim()) {
-      setScanError('Please enter a valid website URL to scan.');
+      setScanError('Please paste or type the link you want to check.');
       return;
     }
     if (activeTab === 'apk' && !overrideData && !selectedFile) {
-      setScanError('Please select an APK or document file from your device.');
+      setScanError('Please select a file from your phone or device.');
       return;
     }
     if (activeTab === 'message' && !overrideData && !inputMessage.trim()) {
-      setScanError('Please enter or paste the message text to analyze.');
+      setScanError('Please paste the message text you want to check.');
       return;
     }
     if (activeTab === 'qr' && !overrideData && !qrText.trim()) {
-      setScanError('Please scan a live QR code or upload a QR image file.');
+      setScanError('Please upload a QR code image or scan one with your camera.');
       return;
     }
 
@@ -73,22 +81,14 @@ export default function ScannerScreen({
           method: 'POST',
           body: JSON.stringify({ url: target })
         });
-        if (apiRes.ok && apiRes.data) {
-          result = apiRes.data;
-        } else {
-          result = analyzeUrl(target);
-        }
+        result = (apiRes.ok && apiRes.data) ? apiRes.data : analyzeUrl(target);
       } else if (activeTab === 'message') {
         const msg = overrideData || inputMessage.trim();
         const apiRes = await safeApiCall('/api/scan/message', {
           method: 'POST',
           body: JSON.stringify({ message: msg })
         });
-        if (apiRes.ok && apiRes.data) {
-          result = apiRes.data;
-        } else {
-          result = analyzeMessage(msg);
-        }
+        result = (apiRes.ok && apiRes.data) ? apiRes.data : analyzeMessage(msg);
       } else if (activeTab === 'apk') {
         const fileToScan = overrideData || selectedFile;
         const formData = new FormData();
@@ -101,11 +101,7 @@ export default function ScannerScreen({
           body: formData
         });
 
-        if (fetchRes.ok) {
-          result = await fetchRes.json();
-        } else {
-          result = await analyzeFile(fileToScan);
-        }
+        result = fetchRes.ok ? await fetchRes.json() : await analyzeFile(fileToScan);
       } else if (activeTab === 'qr') {
         const qrData = overrideData || qrText.trim();
         result = analyzeImageOrQr(qrData, 'Scanned QR Code');
@@ -125,10 +121,10 @@ export default function ScannerScreen({
   };
 
   const tabConfig = [
-    { id: 'url', label: 'Link', Icon: Link, activeColor: 'var(--brand-cyan)' },
-    { id: 'apk', label: 'APK / File', Icon: Package, activeColor: 'var(--brand-emerald)' },
-    { id: 'message', label: 'Message', Icon: MessageSquare, activeColor: '#fbbf24' },
-    { id: 'qr', label: 'QR / OCR', Icon: Camera, activeColor: 'var(--dangerous-primary)' }
+    { id: 'url', label: 'Link / Website', emoji: '🔗', Icon: Link, activeColor: 'var(--brand-cyan)' },
+    { id: 'apk', label: 'App File', emoji: '📦', Icon: Package, activeColor: 'var(--brand-emerald)' },
+    { id: 'message', label: 'Message', emoji: '💬', Icon: MessageSquare, activeColor: '#fbbf24' },
+    { id: 'qr', label: 'QR Code', emoji: '📸', Icon: Camera, activeColor: 'var(--dangerous-primary)' }
   ];
 
   return (
@@ -137,10 +133,10 @@ export default function ScannerScreen({
       {/* Header */}
       <div>
         <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: 0 }} className="gradient-text-brand">
-          Unified Security Scanner
+          🛡️ Check for Safety
         </h2>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-          Select what you want to check for phishing, viruses or scam indicators.
+        <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+          Choose what you want to check below.
         </p>
       </div>
 
@@ -164,23 +160,24 @@ export default function ScannerScreen({
               border: activeTab === tab.id ? `1px solid color-mix(in srgb, ${tab.activeColor} 40%, transparent)` : '1px solid transparent',
               borderRadius: '12px',
               padding: '10px 4px',
-              fontSize: '0.78rem',
+              fontSize: '0.72rem',
               fontWeight: 600,
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               gap: '4px',
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              lineHeight: 1.3
             }}
           >
-            <tab.Icon size={18} />
+            <span style={{ fontSize: '1.3rem' }}>{tab.emoji}</span>
             <span>{tab.label}</span>
           </button>
         ))}
       </div>
 
-      {/* Dynamic Input Cards */}
+      {/* Dynamic Input Panel */}
       {!isScanning ? (
         <GlassCard>
           {scanError && (
@@ -190,28 +187,33 @@ export default function ScannerScreen({
               background: 'var(--dangerous-bg)',
               border: '1px solid var(--dangerous-border)',
               color: 'var(--dangerous-primary)',
-              fontSize: '0.85rem',
+              fontSize: '0.88rem',
               fontWeight: 600,
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              marginBottom: '12px'
+              marginBottom: '14px'
             }}>
               <AlertCircle size={16} />
               <span>{scanError}</span>
             </div>
           )}
-          {/* TAB 1: LINK SCANNER */}
+
+          {/* TAB 1: LINK / WEBSITE */}
           {activeTab === 'url' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Link size={20} color="var(--brand-cyan)" />
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Check Suspicious Website Link</h3>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 4px 0' }}>
+                  🔗 Check a Link or Website
+                </h3>
+                <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Got a suspicious link from WhatsApp, SMS, or email? Paste it below.
+                </p>
               </div>
-              
+
               <input
                 type="text"
-                placeholder="Paste link here (e.g. paypa1-verify-account.xyz)"
+                placeholder="Paste link here, e.g. paypa1-verify-account.xyz"
                 value={inputUrl}
                 onChange={(e) => setInputUrl(e.target.value)}
                 style={{
@@ -227,43 +229,49 @@ export default function ScannerScreen({
               />
 
               <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Try Sample Examples:</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  <button 
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>
+                  👉 Or try a demo example:
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
                     onClick={() => { setInputUrl(MOCK_EXAMPLES.dangerousLink); handleStartScan(MOCK_EXAMPLES.dangerousLink); }}
-                    className="glass-pill" 
+                    className="glass-pill"
                     style={{ background: 'var(--dangerous-bg)', color: 'var(--dangerous-primary)', borderColor: 'var(--dangerous-border)', cursor: 'pointer' }}
                   >
-                    🔴 Phishing Link Demo
+                    🔴 Fake PayPal Link (Dangerous)
                   </button>
-                  <button 
+                  <button
                     onClick={() => { setInputUrl(MOCK_EXAMPLES.safeLink); handleStartScan(MOCK_EXAMPLES.safeLink); }}
-                    className="glass-pill" 
+                    className="glass-pill"
                     style={{ background: 'var(--safe-bg)', color: 'var(--safe-primary)', borderColor: 'var(--safe-border)', cursor: 'pointer' }}
                   >
-                    🟢 Safe Google Link
+                    🟢 Google.com (Safe)
                   </button>
                 </div>
               </div>
 
-              <button onClick={() => handleStartScan()} className="btn-primary" style={{ marginTop: '8px' }}>
-                <ShieldCheck size={20} /> Analyze Link Now
+              <button onClick={() => handleStartScan()} className="btn-primary" style={{ marginTop: '4px' }}>
+                <ShieldCheck size={20} /> Check This Link Now
               </button>
             </div>
           )}
 
-          {/* TAB 2: APK / FILE SCANNER */}
+          {/* TAB 2: APP FILE / APK */}
           {activeTab === 'apk' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Package size={20} color="var(--brand-emerald)" />
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Check APK / Document / File</h3>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 4px 0' }}>
+                  📦 Check a Downloaded App or File
+                </h3>
+                <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Have an app file (.APK) or document you downloaded? Select it below to check for viruses.
+                </p>
               </div>
 
               <label style={{
                 border: '2px dashed var(--safe-border)',
                 borderRadius: '16px',
-                padding: '30px 20px',
+                padding: '28px 20px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -276,46 +284,48 @@ export default function ScannerScreen({
                 <UploadCloud size={36} color="var(--brand-emerald)" />
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                    {selectedFile ? selectedFile.name : 'Tap to Select File or Drag & Drop'}
+                    {selectedFile ? `✅ Selected: ${selectedFile.name}` : '👆 Tap here to select file'}
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    Supports .APK, .PDF, .EXE, .ZIP, Images (Max 50MB)
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    Supports .APK, .PDF, .EXE, .ZIP, images (Max 50MB)
                   </div>
                 </div>
-                <input 
-                  type="file" 
-                  style={{ display: 'none' }} 
+                <input
+                  type="file"
+                  style={{ display: 'none' }}
                   onChange={(e) => { if (e.target.files[0]) setSelectedFile(e.target.files[0]); }}
                 />
               </label>
 
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button 
-                  onClick={() => { setSelectedFile(MOCK_EXAMPLES.dangerousApk); handleStartScan(MOCK_EXAMPLES.dangerousApk); }}
-                  className="glass-pill" 
-                  style={{ background: 'var(--dangerous-bg)', color: 'var(--dangerous-primary)', borderColor: 'var(--dangerous-border)', width: '100%', justifyContent: 'center', cursor: 'pointer' }}
-                >
-                  🔴 Test Sample Trojan APK (Free_Netflix.apk)
-                </button>
-              </div>
+              <button
+                onClick={() => { setSelectedFile(MOCK_EXAMPLES.dangerousApk); handleStartScan(MOCK_EXAMPLES.dangerousApk); }}
+                className="glass-pill"
+                style={{ background: 'var(--dangerous-bg)', color: 'var(--dangerous-primary)', borderColor: 'var(--dangerous-border)', width: '100%', justifyContent: 'center', cursor: 'pointer' }}
+              >
+                🔴 Test: Scan a Fake Netflix APK (Trojan Demo)
+              </button>
 
               <button onClick={() => handleStartScan()} className="btn-primary" style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)' }}>
-                <Package size={20} /> Inspect & Calculate SHA-256
+                <Package size={20} /> Scan This File Now
               </button>
             </div>
           )}
 
-          {/* TAB 3: MESSAGE / SMS SCANNER */}
+          {/* TAB 3: MESSAGE / SMS */}
           {activeTab === 'message' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <MessageSquare size={20} color="#fbbf24" />
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Check SMS / WhatsApp / Email Text</h3>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 4px 0' }}>
+                  💬 Check a Suspicious Message
+                </h3>
+                <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Paste any WhatsApp message, SMS, or email that seems suspicious.
+                </p>
               </div>
 
               <textarea
                 rows={4}
-                placeholder="Paste SMS text here (e.g. Your bank account will be blocked...)"
+                placeholder={`Example: "Your bank account will be blocked! Click here: http://sbi-alert.xyz"`}
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 style={{
@@ -332,37 +342,43 @@ export default function ScannerScreen({
               />
 
               <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Try Sample Scam Messages:</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  <button 
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>
+                  👉 Or try a sample scam message:
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  <button
                     onClick={() => { setInputMessage(MOCK_EXAMPLES.phishingMsg); handleStartScan(MOCK_EXAMPLES.phishingMsg); }}
                     className="glass-pill"
                     style={{ background: 'var(--suspicious-bg)', color: 'var(--suspicious-primary)', borderColor: 'var(--suspicious-border)', cursor: 'pointer' }}
                   >
-                    ⚠️ Bank Urgency Scam
+                    ⚠️ Bank Scam SMS
                   </button>
-                  <button 
+                  <button
                     onClick={() => { setInputMessage(MOCK_EXAMPLES.scamMsg); handleStartScan(MOCK_EXAMPLES.scamMsg); }}
                     className="glass-pill"
                     style={{ background: 'var(--dangerous-bg)', color: 'var(--dangerous-primary)', borderColor: 'var(--dangerous-border)', cursor: 'pointer' }}
                   >
-                    🚨 Prize / OTP Scam
+                    🚨 Fake Prize Scam
                   </button>
                 </div>
               </div>
 
               <button onClick={() => handleStartScan()} className="btn-primary" style={{ background: 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)' }}>
-                <MessageSquare size={20} /> Run NLP Scam Detector
+                <MessageSquare size={20} /> Check This Message
               </button>
             </div>
           )}
 
-          {/* TAB 4: QR CODE / SCREENSHOT OCR */}
+          {/* TAB 4: QR CODE / SCREENSHOT */}
           {activeTab === 'qr' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <QrCode size={20} color="var(--dangerous-primary)" />
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Scan QR Code or Upload Screenshot</h3>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: '0 0 4px 0' }}>
+                  📸 Scan a QR Code or Screenshot
+                </h3>
+                <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Upload a photo of the QR code or screenshot to check for hidden dangerous links.
+                </p>
               </div>
 
               <label style={{
@@ -377,66 +393,54 @@ export default function ScannerScreen({
                 cursor: 'pointer',
                 background: 'var(--dangerous-bg)'
               }}>
-                <Camera size={36} color="var(--dangerous-primary)" />
+                <span style={{ fontSize: '3rem' }}>📸</span>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                    Upload Screenshot or Scan Camera QR
+                    👆 Tap to upload QR code or screenshot
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    Extracts embedded links & screenshot error messages automatically
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    We'll extract and check any links found inside
                   </div>
                 </div>
-                <input 
-                  type="file" 
+                <input
+                  type="file"
                   accept="image/*"
-                  style={{ display: 'none' }} 
+                  style={{ display: 'none' }}
                   onChange={() => {
-                    setQrText('http://paypal-security-alert-2026.xyz/login'); 
-                    handleStartScan('http://paypal-security-alert-2026.xyz/login'); 
+                    setQrText('http://paypal-security-alert-2026.xyz/login');
+                    handleStartScan('http://paypal-security-alert-2026.xyz/login');
                   }}
                 />
               </label>
 
-              <button 
+              <button
                 onClick={() => { setQrText(MOCK_EXAMPLES.dangerousLink); handleStartScan(MOCK_EXAMPLES.dangerousLink); }}
-                className="btn-primary" 
+                className="btn-primary"
                 style={{ background: 'linear-gradient(135deg, #e11d48 0%, #f43f5e 100%)' }}
               >
-                <Camera size={20} /> Simulate QR Scan & OCR Extraction
+                <Camera size={20} /> Try a Demo QR Scan
               </button>
             </div>
           )}
         </GlassCard>
       ) : (
-        /* Real-Time Multi-Stage Animated Scanner Screen */
+        /* Scanning Animation */
         <GlassCard className="scan-pulse-active" style={{ padding: '30px 20px', textAlign: 'center' }}>
-          <div style={{ position: 'relative', width: '90px', height: '90px', margin: '0 auto 20px auto' }}>
-            <div style={{
-              width: '90px',
-              height: '90px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.2), rgba(5, 150, 105, 0.3))',
-              border: '2px solid var(--brand-cyan)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              animation: 'pulseGlow 1.5s infinite ease-in-out'
-            }}>
-              <ShieldCheck size={44} color="var(--brand-cyan)" />
-            </div>
+          <div style={{ fontSize: '5rem', marginBottom: '12px', animation: 'pulseGlow 1.5s infinite ease-in-out', display: 'inline-block' }}>
+            🔍
           </div>
 
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '6px' }}>
-            CypherBuddy Security Engine Active
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '4px' }}>
+            Checking for Safety...
           </h3>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
-            Running deep multi-layer security analysis...
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '24px' }}>
+            Please wait a moment while we scan for threats.
           </p>
 
           <div style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '10px',
+            gap: '12px',
             textAlign: 'left',
             maxWidth: '360px',
             margin: '0 auto',
@@ -449,13 +453,13 @@ export default function ScannerScreen({
               const isCompleted = idx < scanStepIndex;
               const isCurrent = idx === scanStepIndex;
               return (
-                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.82rem' }}>
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem' }}>
                   {isCompleted ? (
                     <CheckCircle2 size={16} color="var(--safe-primary)" />
                   ) : isCurrent ? (
-                    <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid var(--brand-cyan)', borderTopColor: 'transparent', animation: 'spin 1s linear infinite' }} />
+                    <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid var(--brand-cyan)', borderTopColor: 'transparent', animation: 'spin 1s linear infinite', flexShrink: 0 }} />
                   ) : (
-                    <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '1px solid var(--glass-border)' }} />
+                    <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '1px solid var(--glass-border)', flexShrink: 0 }} />
                   )}
                   <span style={{ color: isCompleted ? 'var(--safe-primary)' : (isCurrent ? 'var(--brand-cyan)' : 'var(--text-subtle)'), fontWeight: isCurrent ? 600 : 400 }}>
                     {stepText}

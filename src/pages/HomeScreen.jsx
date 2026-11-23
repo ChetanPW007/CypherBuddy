@@ -14,7 +14,9 @@ import {
   History,
   Shield,
   Smartphone,
-  BookOpen
+  BookOpen,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import BackgroundGatewaySimulator from '../components/BackgroundGatewaySimulator';
 
@@ -34,17 +36,23 @@ export default function HomeScreen({
   let statusColor = 'var(--dangerous-primary)';
   let statusBg = 'var(--dangerous-bg)';
   let statusBorder = 'var(--dangerous-border)';
+  let statusEmoji = '❌';
+  let statusMessage = 'Setup not completed yet';
 
   if (isSetupCompleted && notifPerm && cameraPerm) {
     protectionStatus = 'ACTIVE';
     statusColor = 'var(--safe-primary)';
     statusBg = 'var(--safe-bg)';
     statusBorder = 'var(--safe-border)';
+    statusEmoji = '✅';
+    statusMessage = 'You are fully protected!';
   } else if (isSetupCompleted) {
-    protectionStatus = 'LIMITED';
+    protectionStatus = 'PARTIAL';
     statusColor = 'var(--suspicious-primary)';
     statusBg = 'var(--suspicious-bg)';
     statusBorder = 'var(--suspicious-border)';
+    statusEmoji = '⚠️';
+    statusMessage = 'Some features need your permission';
   }
 
   const handleQuickScan = (type) => {
@@ -52,28 +60,28 @@ export default function HomeScreen({
     setActiveTab('scan');
   };
 
-  const sampleTroubleshootChips = [
-    { label: 'Wi-Fi not connecting?', query: 'Wi-Fi disconnects or won\'t connect' },
-    { label: 'Bluetooth pairing failed?', query: 'Bluetooth earphones won\'t pair' },
-    { label: 'App install blocked?', query: 'App not installed error' },
-    { label: 'Storage full?', query: 'Phone storage full clean cache' }
+  const troubleshootTopics = [
+    { label: '📶 Wi-Fi not connecting?', query: 'Wi-Fi disconnects or won\'t connect' },
+    { label: '🎧 Bluetooth not pairing?', query: 'Bluetooth earphones won\'t pair' },
+    { label: '📦 App not installing?', query: 'App not installed error' },
+    { label: '💾 Phone storage full?', query: 'Phone storage full clean cache' }
   ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: '90px' }}>
-      
-      {/* DEVICE PROTECTION STATUS CARD (Section 21 Requirement) */}
+
+      {/* PROTECTION STATUS CARD */}
       <GlassCard style={{ border: `1px solid ${statusBorder}`, background: statusBg }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Shield size={24} color={statusColor} />
+            <span style={{ fontSize: '2rem' }}>{statusEmoji}</span>
             <div>
-              <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>🛡️ Device Protection</div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Real-time Android Protection Shield</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 800 }}>Your Protection</div>
+              <div style={{ fontSize: '0.82rem', color: statusColor, fontWeight: 700 }}>{statusMessage}</div>
             </div>
           </div>
           <span style={{
-            fontSize: '0.8rem',
+            fontSize: '0.78rem',
             fontWeight: 800,
             padding: '4px 10px',
             borderRadius: '20px',
@@ -81,233 +89,242 @@ export default function HomeScreen({
             border: `1px solid ${statusBorder}`,
             background: 'var(--glass-card)'
           }}>
-            Status: {protectionStatus}
+            {protectionStatus}
           </span>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', margin: '10px 0 14px 0', fontSize: '0.82rem' }}>
-          <div style={{ color: 'var(--safe-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <ShieldCheck size={14} /> Account protected & device bound
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', margin: '10px 0 14px 0', fontSize: '0.84rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--safe-primary)' }}>
+            <CheckCircle2 size={15} /> Account & device are secure
           </div>
-          <div style={{ color: notifPerm ? 'var(--safe-primary)' : 'var(--suspicious-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <ShieldCheck size={14} /> Notifications: {notifPerm ? 'Enabled' : 'Disabled (Click Manage)'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: notifPerm ? 'var(--safe-primary)' : 'var(--suspicious-primary)' }}>
+            {notifPerm ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
+            Alerts: {notifPerm ? 'On — will warn you when threats are found' : 'Off — tap Settings to turn on'}
           </div>
-          <div style={{ color: cameraPerm ? 'var(--safe-primary)' : 'var(--suspicious-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <ShieldCheck size={14} /> QR scanning: {cameraPerm ? 'Camera Available' : 'Upload Alternative Active'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: cameraPerm ? 'var(--safe-primary)' : 'var(--suspicious-primary)' }}>
+            {cameraPerm ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
+            QR scanning: {cameraPerm ? 'Camera ready' : 'Use photo upload instead'}
           </div>
-          <div style={{ color: 'var(--safe-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <ShieldCheck size={14} /> File scanning: Storage Access Framework (SAF)
-          </div>
-          <div style={{ color: 'var(--safe-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <ShieldCheck size={14} /> Link protection: Configured (HTTP/HTTPS Share Intent)
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--safe-primary)' }}>
+            <CheckCircle2 size={15} /> Link guard: Checks every link before you open it
           </div>
         </div>
 
-        <button 
+        <button
           onClick={() => setActiveTab('permissions')}
           className="btn-secondary"
-          style={{ width: '100%', fontSize: '0.82rem', padding: '10px' }}
+          style={{ width: '100%', fontSize: '0.84rem', padding: '11px' }}
         >
-          <Smartphone size={15} /> Manage Protection Settings
+          <Smartphone size={15} /> ⚙️ Manage Settings
         </button>
       </GlassCard>
 
-      {/* Hero Welcome & Background Gateway Banner Card */}
+      {/* QUICK SCAN HERO */}
       <GlassCard className="scan-pulse-active" style={{ background: 'linear-gradient(135deg, rgba(5, 150, 105, 0.08), rgba(2, 132, 199, 0.12))' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-          <div>
-            <span className="glass-pill" style={{ color: 'var(--brand-cyan)', borderColor: 'rgba(2, 132, 199, 0.3)' }}>
-              <Shield size={13} /> Active Background Security Gateway
-            </span>
-            <h2 style={{ fontSize: '1.45rem', fontWeight: 800, marginTop: '8px', marginBottom: '4px' }}>
-              Check Silently. Warn Intelligently.
-            </h2>
-            <p style={{ fontSize: '0.86rem', color: 'var(--text-muted)', margin: 0 }}>
-              CypherBuddy works quietly in the background without interrupting safe actions.
-            </p>
-          </div>
+        <div style={{ marginBottom: '12px' }}>
+          <span className="glass-pill" style={{ color: 'var(--brand-cyan)', borderColor: 'rgba(2, 132, 199, 0.3)' }}>
+            <Shield size={13} /> Active — Watching every link you open
+          </span>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginTop: '10px', marginBottom: '4px' }}>
+            Check Something Now
+          </h2>
+          <p style={{ fontSize: '0.86rem', color: 'var(--text-muted)', margin: 0 }}>
+            Got a suspicious link, message, or file? Tap to check it instantly.
+          </p>
         </div>
 
-        {/* Large Manual Scan Button */}
-        <button 
+        {/* Big Primary Scan Button */}
+        <button
           onClick={() => handleQuickScan('url')}
           className="btn-primary"
-          style={{ fontSize: '1.05rem', padding: '15px 24px', marginTop: '10px' }}
+          style={{ fontSize: '1.05rem', padding: '16px 24px', marginTop: '10px', width: '100%' }}
         >
           <Search size={22} />
-          <span>🔍 Manual Scan / Check URL</span>
+          <span>🔍 Check a Link or Website</span>
         </button>
 
-        {/* Quick Action Shortcut Buttons */}
+        {/* Quick Scan Grid */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(2, 1fr)',
           gap: '10px',
-          marginTop: '14px'
+          marginTop: '12px'
         }}>
-          <button 
-            onClick={() => handleQuickScan('url')}
-            className="btn-secondary"
-            style={{ padding: '10px 12px', fontSize: '0.85rem', justifyContent: 'flex-start' }}
-          >
-            <Link size={17} color="var(--brand-cyan)" />
-            <span>🔗 Check Link</span>
-          </button>
-
-          <button 
+          <button
             onClick={() => handleQuickScan('apk')}
             className="btn-secondary"
-            style={{ padding: '10px 12px', fontSize: '0.85rem', justifyContent: 'flex-start' }}
+            style={{ padding: '12px', fontSize: '0.88rem', flexDirection: 'column', gap: '4px', alignItems: 'center', textAlign: 'center' }}
           >
-            <Package size={17} color="var(--brand-emerald)" />
-            <span>📦 Check APK / File</span>
+            <Package size={22} color="var(--brand-emerald)" />
+            <span>📦 Check an App File</span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400 }}>APK / download</span>
           </button>
 
-          <button 
+          <button
             onClick={() => handleQuickScan('message')}
             className="btn-secondary"
-            style={{ padding: '10px 12px', fontSize: '0.85rem', justifyContent: 'flex-start' }}
+            style={{ padding: '12px', fontSize: '0.88rem', flexDirection: 'column', gap: '4px', alignItems: 'center', textAlign: 'center' }}
           >
-            <MessageSquare size={17} color="#fbbf24" />
-            <span>💬 Check Message</span>
+            <MessageSquare size={22} color="#fbbf24" />
+            <span>💬 Check a Message</span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400 }}>SMS / WhatsApp</span>
           </button>
 
-          <button 
+          <button
             onClick={() => handleQuickScan('qr')}
             className="btn-secondary"
-            style={{ padding: '10px 12px', fontSize: '0.85rem', justifyContent: 'flex-start' }}
+            style={{ padding: '12px', fontSize: '0.88rem', flexDirection: 'column', gap: '4px', alignItems: 'center', textAlign: 'center' }}
           >
-            <Camera size={17} color="var(--dangerous-primary)" />
-            <span>📸 QR / Screenshot</span>
+            <Camera size={22} color="var(--dangerous-primary)" />
+            <span>📸 Scan a QR Code</span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400 }}>or screenshot</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('reports')}
+            className="btn-secondary"
+            style={{ padding: '12px', fontSize: '0.88rem', flexDirection: 'column', gap: '4px', alignItems: 'center', textAlign: 'center' }}
+          >
+            <History size={22} color="var(--brand-cyan)" />
+            <span>📋 View Past Checks</span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400 }}>{history.length} records</span>
           </button>
         </div>
       </GlassCard>
 
-      {/* Case Study Feature Card for College Presentation & Viva */}
-      <GlassCard style={{ background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.15), rgba(15, 23, 42, 0.9))', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <span className="glass-pill" style={{ color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)', background: 'rgba(56, 189, 248, 0.1)' }}>
-            <BookOpen size={13} /> Academic Presentation & Viva Guide
-          </span>
-          <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 700 }}>Python Web Security</span>
-        </div>
-
-        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: '4px 0', color: '#f8fafc' }}>
-          Case Study: Secure Coding in Python Web Apps
-        </h3>
-
-        <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: '0 0 12px 0', lineHeight: 1.4 }}>
-          Explore the 6 key security weaknesses, simple explanations, impact & fix priorities, secure coding principles, SSDLC flowchart, and viva Q&A defense answers.
-        </p>
-
-        <button
-          onClick={() => setActiveTab('case-study')}
-          className="btn-primary"
-          style={{ width: '100%', fontSize: '0.85rem', padding: '10px', background: 'linear-gradient(135deg, #0284c7, #0369a1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-        >
-          <BookOpen size={16} /> Launch Interactive Case Study Presentation
-        </button>
-      </GlassCard>
-
-      {/* Interactive Background Security Gateway Simulator */}
-      <BackgroundGatewaySimulator onTriggerGatewayNotification={onTriggerGatewayNotification} />
-
-      {/* Digital Problem Section */}
+      {/* Need Help Card */}
       <GlassCard>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
           <div>
-            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Bot size={22} color="var(--brand-cyan)" /> Having a digital problem?
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Bot size={22} color="var(--brand-cyan)" /> Having a phone problem?
             </h3>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '2px', margin: 0 }}>
-              Visual step-by-step guidance & YouTube tutorials.
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '4px', margin: '4px 0 0 0' }}>
+              Tap a topic below and get simple step-by-step help.
             </p>
           </div>
-
-          <button 
+          <button
             onClick={() => setActiveTab('assistant')}
             className="btn-secondary"
-            style={{ padding: '6px 14px', minHeight: '36px', fontSize: '0.8rem' }}
+            style={{ padding: '8px 14px', minHeight: '36px', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
           >
-            Get Help <ChevronRight size={14} />
+            Ask AI <ChevronRight size={14} />
           </button>
         </div>
 
-        {/* Quick Problem Selector Chips */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-          {sampleTroubleshootChips.map((chip, idx) => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {troubleshootTopics.map((chip, idx) => (
             <button
               key={idx}
               onClick={() => onSelectTroubleshoot(chip.query)}
-              className="glass-pill"
               style={{
+                background: 'var(--glass-bg)',
+                border: '1px solid var(--glass-border)',
+                borderRadius: '12px',
+                padding: '12px 14px',
                 cursor: 'pointer',
+                textAlign: 'left',
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                color: 'var(--text-main)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
                 transition: 'all 0.2s'
               }}
             >
               <span>{chip.label}</span>
+              <ChevronRight size={15} color="var(--text-subtle)" />
             </button>
           ))}
         </div>
       </GlassCard>
 
-      {/* Recent Activity Feed */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <History size={18} color="var(--brand-emerald)" /> Gateway Inspection Log
-          </h3>
-          <button 
-            onClick={() => setActiveTab('reports')}
-            style={{ background: 'none', border: 'none', color: 'var(--brand-cyan)', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}
-          >
-            View All ({history.length})
-          </button>
+      {/* Background Security Demo (unchanged) */}
+      <BackgroundGatewaySimulator onTriggerGatewayNotification={onTriggerGatewayNotification} />
+
+      {/* Case Study — College */}
+      <GlassCard style={{ background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.15), rgba(15, 23, 42, 0.9))', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <span className="glass-pill" style={{ color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)', background: 'rgba(56, 189, 248, 0.1)' }}>
+            <BookOpen size={13} /> For Students / College
+          </span>
+          <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 700 }}>Python Security</span>
         </div>
+        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: '4px 0', color: '#f8fafc' }}>
+          Case Study: How Hackers Break Websites
+        </h3>
+        <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: '0 0 12px 0', lineHeight: 1.5 }}>
+          Simple explanations of the top security mistakes in Python web apps, plus viva Q&A answers and diagrams.
+        </p>
+        <button
+          onClick={() => setActiveTab('case-study')}
+          className="btn-primary"
+          style={{ width: '100%', fontSize: '0.88rem', padding: '11px', background: 'linear-gradient(135deg, #0284c7, #0369a1)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+        >
+          <BookOpen size={16} /> Open Case Study Presentation
+        </button>
+      </GlassCard>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {history.slice(0, 4).map((item, idx) => {
-            let badgeClass = 'badge-safe';
-            let IconTag = ShieldCheck;
-            if (item.status === 'DANGEROUS') {
-              badgeClass = 'badge-dangerous';
-              IconTag = ShieldAlert;
-            } else if (item.status === 'SUSPICIOUS') {
-              badgeClass = 'badge-suspicious';
-              IconTag = AlertTriangle;
-            }
+      {/* Recent Checks */}
+      {history.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+              <History size={18} color="var(--brand-emerald)" /> Recent Checks
+            </h3>
+            <button
+              onClick={() => setActiveTab('reports')}
+              style={{ background: 'none', border: 'none', color: 'var(--brand-cyan)', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}
+            >
+              See All ({history.length})
+            </button>
+          </div>
 
-            return (
-              <GlassCard 
-                key={item.id || idx}
-                onClick={() => onSelectScanItem(item)}
-                style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, overflow: 'hidden' }}>
-                  <div className={badgeClass} style={{ padding: '8px', borderRadius: '12px' }}>
-                    <IconTag size={18} />
-                  </div>
-                  <div style={{ overflow: 'hidden' }}>
-                    <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {item.target || item.title || 'Security Scan'}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {history.slice(0, 3).map((item, idx) => {
+              let badgeClass = 'badge-safe';
+              let IconTag = ShieldCheck;
+              let statusLabel = '✅ Safe';
+              if (item.status === 'DANGEROUS') {
+                badgeClass = 'badge-dangerous';
+                IconTag = ShieldAlert;
+                statusLabel = '🚨 Dangerous';
+              } else if (item.status === 'SUSPICIOUS') {
+                badgeClass = 'badge-suspicious';
+                IconTag = AlertTriangle;
+                statusLabel = '⚠️ Suspicious';
+              }
+
+              return (
+                <GlassCard
+                  key={item.id || idx}
+                  onClick={() => onSelectScanItem(item)}
+                  style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, overflow: 'hidden' }}>
+                    <div className={badgeClass} style={{ padding: '8px', borderRadius: '12px', flexShrink: 0 }}>
+                      <IconTag size={18} />
                     </div>
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                      {item.type || 'SCAN'} • {item.timestamp || 'Recent'}
+                    <div style={{ overflow: 'hidden' }}>
+                      <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {item.target || item.title || 'Security Check'}
+                      </div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                        {item.timestamp || 'Recent'}
+                      </div>
                     </div>
                   </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className={badgeClass}>
-                    {item.status} ({item.riskScore})
-                  </span>
-                  <ChevronRight size={16} color="var(--text-subtle)" />
-                </div>
-              </GlassCard>
-            );
-          })}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                    <span className={badgeClass} style={{ fontSize: '0.74rem' }}>{statusLabel}</span>
+                    <ChevronRight size={14} color="var(--text-subtle)" />
+                  </div>
+                </GlassCard>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
     </div>
   );

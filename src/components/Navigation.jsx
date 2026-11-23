@@ -3,14 +3,12 @@ import { Home, Scan, Bot, FileText, Users, SlidersHorizontal, LayoutDashboard, B
 
 export default function Navigation({ activeTab, setActiveTab }) {
   const navItems = [
-    { id: 'home', label: 'Home', icon: Home },
-    { id: 'scan', label: 'Scan', icon: Scan },
-    { id: 'assistant', label: 'Assistant', icon: Bot },
-    { id: 'reports', label: 'Reports', icon: FileText },
-    { id: 'case-study', label: 'Case Study', icon: BookOpen },
-    { id: 'family', label: 'Family', icon: Users },
-    { id: 'permissions', label: 'Shield', icon: SlidersHorizontal },
-    { id: 'admin', label: 'Admin', icon: LayoutDashboard }
+    { id: 'home',        label: 'Home',     emoji: '🏠', icon: Home },
+    { id: 'scan',        label: 'Check',    emoji: '🔍', icon: Scan },
+    { id: 'assistant',   label: 'Help',     emoji: '🤖', icon: Bot },
+    { id: 'reports',     label: 'History',  emoji: '📋', icon: FileText },
+    { id: 'family',      label: 'Family',   emoji: '👨‍👩‍👧', icon: Users },
+    { id: 'permissions', label: 'Settings', emoji: '⚙️', icon: SlidersHorizontal },
   ];
 
   return (
@@ -24,9 +22,10 @@ export default function Navigation({ activeTab, setActiveTab }) {
             onClick={() => setActiveTab(item.id)}
             className={`nav-item ${isActive ? 'active' : ''}`}
             title={item.label}
+            style={{ gap: '2px' }}
           >
-            <Icon size={20} color={isActive ? 'var(--brand-cyan)' : 'var(--text-subtle)'} />
-            <span>{item.label}</span>
+            <span style={{ fontSize: '1.2rem' }}>{item.emoji}</span>
+            <span style={{ fontSize: '0.68rem', marginTop: '0' }}>{item.label}</span>
           </button>
         );
       })}
